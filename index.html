@@ -23,6 +23,7 @@
             background-color: rgba(0, 0, 0, 0.5); /* 半透明背景以便更好地看清文本 */
             padding: 20px;
             border-radius: 10px;
+            margin-bottom: 20px;
         }
         a {
             color: #00f; /* 超链接颜色 */
@@ -35,7 +36,7 @@
             display: flex;
             justify-content: center; /* 水平居中对齐按钮 */
             gap: 20px; /* 按钮之间的间距 */
-            margin-top: 70px; /* 按钮容器与上方内容的间距 */
+            margin-top: 50px; /* 按钮容器与上方内容的间距 */
         }
         .button {
             background-color: rgba(0, 0, 0, 0.5); /* 半透明背景以便更好地看清文本 */
@@ -50,7 +51,7 @@
             cursor: pointer;
             border-radius: 12px;
             flex: 1; /* 使按钮在容器中平分空间 */
-            max-width: 200px; /* 限制按钮最大宽度 */
+            max-width: 300px; /* 限制按钮最大宽度 */
         }
         .button:hover {
             background-color: #45a049; /* 鼠标悬停时的颜色 */
@@ -62,12 +63,13 @@
         <h1>欢迎访问我的网站</h1>
         <p>这是一个空空的网页</p>
         <p>查看更多内容，请访问 <a href="https://quqingy.github.io" target="_blank">这里</a>。</p>
-    </div>
-    <div class="button-container">
+        <div class="button-container">
         <button class="button" onclick="location.href='story.html'">故事</button>
         <button class="button" onclick="location.href='ukulele.html'">弹琴</button>
         <button class="button" onclick="location.href='perception.html'">P~E~R~C~E~P~T~I~O~N</button>
         <button class="button" onclick="location.href='other.html'">杂思</button>
     </div>
+    </div>
+
 </body>
 </html>
