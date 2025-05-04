@@ -89,8 +89,10 @@
             // Update text content for each element
             document.getElementById('title').innerText = translations[currentLanguage].title;
             document.getElementById('description').innerText = translations[currentLanguage].description;
-            document.getElementById('secret').innerHTML = translations[currentLanguage].secret + 
-                `<a href="https://quqingy.github.io" target="_blank">${currentLanguage === 'zh' ? '这里' : 'here'}</a>.`;
+            const linkText = currentLanguage === 'zh' ? '这里' : 'here';
+            const linkHref = currentLanguage === 'zh' ? 'https://quqingy.github.io/bio_ch.html' : 'https://quqingy.github.io/bio_en.html';
+            document.getElementById('secret').innerHTML = translations[currentLanguage].secret +
+        `<a href="${linkHref}" target="_blank">${linkText}</a>.`;
 
             // Update button labels
             document.getElementById('btn-story').innerText = translations[currentLanguage].story;
@@ -104,7 +106,7 @@
     <div class="content">
         <h1 id="title">欢迎访问我的网站</h1>
         <p id="description">这是一个导航页/主页</p>
-        <p id="secret">想知道更多的秘密？请访问 <a href="https://quqingy.github.io" target="_blank">这里</a>。</p>
+        <p id="secret">想知道更多的秘密？请访问 <a href="https://quqingy.github.io/bio_ch.html" target="_blank">这里</a>。</p>
         <div class="button-container">
             <button class="button" id="btn-story" onclick="location.href='story.html'">故事</button>
             <button class="button" id="btn-ukulele" onclick="location.href='ukulele.html'">弹琴</button>
