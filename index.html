@@ -56,19 +56,65 @@
             background-color: #45a049; /* 鼠标悬停时的颜色 */
         }
     </style>
+    <script>
+        // Translation data for Chinese and English
+        const translations = {
+            en: {
+                title: "Welcome to my website",
+                description: "This is a navigation/home page",
+                secret: "Want to know more secrets? Visit ",
+                story: "Story",
+                ukulele: "Ukulele",
+                perception: "PERCEPTION",
+                other: "Thoughts"
+            },
+            zh: {
+                title: "欢迎访问我的网站",
+                description: "这是一个导航页/主页",
+                secret: "想知道更多的秘密？请访问 ",
+                story: "故事",
+                ukulele: "弹琴",
+                perception: "PERCEPTION",
+                other: "杂思"
+            }
+        };
+
+        // Keep track of the current language
+        let currentLanguage = 'zh'; // Default language is Chinese
+
+        // Function to toggle language
+        function toggleLanguage() {
+            currentLanguage = currentLanguage === 'zh' ? 'en' : 'zh'; // Switch language
+
+            // Update text content for each element
+            document.getElementById('title').innerText = translations[currentLanguage].title;
+            document.getElementById('description').innerText = translations[currentLanguage].description;
+            document.getElementById('secret').innerHTML = translations[currentLanguage].secret + 
+                `<a href="https://quqingy.github.io" target="_blank">${currentLanguage === 'zh' ? '这里' : 'here'}</a>.`;
+
+            // Update button labels
+            document.getElementById('btn-story').innerText = translations[currentLanguage].story;
+            document.getElementById('btn-ukulele').innerText = translations[currentLanguage].ukulele;
+            document.getElementById('btn-perception').innerText = translations[currentLanguage].perception;
+            document.getElementById('btn-other').innerText = translations[currentLanguage].other;
+        }
+    </script>
 </head>
 <body>
     <div class="content">
-        <h1>欢迎访问我的网站</h1>
-        <p>这是一个导航页/主页</p>
-        <p>想知道更多的秘密？请访问 <a href="https://quqingy.github.io" target="_blank">这里</a>。</p>
+        <h1 id="title">欢迎访问我的网站</h1>
+        <p id="description">这是一个导航页/主页</p>
+        <p id="secret">想知道更多的秘密？请访问 <a href="https://quqingy.github.io" target="_blank">这里</a>。</p>
         <div class="button-container">
-        <button class="button" onclick="location.href='story.html'">故事</button>
-        <button class="button" onclick="location.href='ukulele.html'">弹琴</button>
-        <button class="button" onclick="location.href='perception.html'">PERCEPTION</button>
-        <button class="button" onclick="location.href='other.html'">杂思</button>
+            <button class="button" id="btn-story" onclick="location.href='story.html'">故事</button>
+            <button class="button" id="btn-ukulele" onclick="location.href='ukulele.html'">弹琴</button>
+            <button class="button" id="btn-perception" onclick="location.href='perception.html'">PERCEPTION</button>
+            <button class="button" id="btn-other" onclick="location.href='other.html'">杂思</button>
+        </div>
+        <div class="button-container">
+            <!-- Language toggle button -->
+            <button class="button" onclick="toggleLanguage()">Chinese/English</button>
+        </div>
     </div>
-    </div>
-
 </body>
 </html>
