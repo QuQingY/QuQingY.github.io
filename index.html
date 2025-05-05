@@ -98,23 +98,13 @@
         document.getElementById('btn-other').innerText = translations[currentLanguage].other;
     }
 
-    // Function to load biography content dynamically
-    function loadBio(language) {
-        const bioPath = language === 'en' ? 'bio_en.html' : 'bio_ch.html';
-        fetch(bioPath)
-            .then(response => response.text())
-            .then(data => {
-                document.querySelector('.content').innerHTML = data;
-            })
-            .catch(err => console.error('Error loading biography:', err));
-    }
 </script>
 </head>
 <body>
     <div class="content">
     <h1 id="title">Welcome to my website</h1>
     <p id="description">This is a navigation/home page</p>
-    <p id="secret">Want to know more secrets? Visit <a href="#" onclick="loadBio('en')">here</a>.</p>
+    <p id="secret">Want to know more secrets? Visit <a href="bio_en.html">here</a>.</p>
     <div class="button-container">
         <button class="button" id="btn-story" onclick="location.href='story.html'">Story</button>
         <button class="button" id="btn-ukulele" onclick="location.href='ukulele.html'">Ukulele</button>
