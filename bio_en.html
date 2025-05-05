@@ -37,15 +37,17 @@
     .button-container a:hover {
       background: #45a049; /* Green color on hover */
     }
-    .profile-photo {
-      margin-top: 4rem;
-      text-align: center;
+    .profile-header {
+      display: flex;
+      align-items: center; /* Align image and text to the same height */
+      justify-content: space-between; /* Push the image to the right */
     }
     
     .photo {
-      width: 200px;
+      width: 300px; /* 1.5 times the original 200px */
+      height: auto; /* Maintain aspect ratio */
       border-radius: 10px;
-      box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
     }
   </style>
 </head>
@@ -55,10 +57,11 @@
     <a href="index.html">Home</a>
   </div>
   <div class="profile-photo">
+    <h1>Qingyu Qu</h1>
     <img src="imgs/QuQingY.png" alt="Qingyu Qu" class="photo">
   </div>
 
-  <h1>Qingyu Qu</h1>
+
   <p class="email">
     Email: <a href="mailto:12210819@mail.sustech.edu.cn">12210819@mail.sustech.edu.cn</a>,
     <a href="mailto:qingyuqu@berkeley.edu">qingyuqu@berkeley.edu</a>
