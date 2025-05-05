@@ -56,67 +56,75 @@
             background-color: #45a049; /* 鼠标悬停时的颜色 */
         }
     </style>
-    <script>
-        // Translation data for Chinese and English
-        const translations = {
-            en: {
-                title: "Welcome to my website",
-                description: "This is a navigation/home page",
-                secret: "Want to know more secrets? Visit ",
-                story: "Story",
-                ukulele: "Ukulele",
-                perception: "PERCEPTION",
-                other: "Thoughts"
-            },
-            zh: {
-                title: "欢迎访问我的网站",
-                description: "这是一个导航页/主页",
-                secret: "想知道更多的秘密？请访问 ",
-                story: "故事",
-                ukulele: "弹琴",
-                perception: "PERCEPTION",
-                other: "杂思"
-            }
-        };
-
-        // Keep track of the current language
-        let currentLanguage = 'zh'; // Default language is Chinese
-
-        // Function to toggle language
-        function toggleLanguage() {
-            currentLanguage = currentLanguage === 'zh' ? 'en' : 'zh'; // Switch language
-
-            // Update text content for each element
-            document.getElementById('title').innerText = translations[currentLanguage].title;
-            document.getElementById('description').innerText = translations[currentLanguage].description;
-            const linkText = currentLanguage === 'zh' ? '这里' : 'here';
-            const linkHref = currentLanguage === 'zh' ? 'bio_ch.html' : 'bio_en.html';
-            document.getElementById('secret').innerHTML = translations[currentLanguage].secret +
-        `<a href="${linkHref}" target="_blank">${linkText}</a>.`;
-
-            // Update button labels
-            document.getElementById('btn-story').innerText = translations[currentLanguage].story;
-            document.getElementById('btn-ukulele').innerText = translations[currentLanguage].ukulele;
-            document.getElementById('btn-perception').innerText = translations[currentLanguage].perception;
-            document.getElementById('btn-other').innerText = translations[currentLanguage].other;
+<script>
+    // Translation data for Chinese and English
+    const translations = {
+        en: {
+            title: "Welcome to my website",
+            description: "This is a navigation/home page",
+            secret: "Want to know more secrets? Visit <a href='#' onclick='loadBio(\"en\")'>here</a>.",
+            story: "Story",
+            ukulele: "Ukulele",
+            perception: "PERCEPTION",
+            other: "Thoughts"
+        },
+        zh: {
+            title: "欢迎访问我的网站",
+            description: "这是一个导航页/主页",
+            secret: "想知道更多的秘密？请访问 <a href='#' onclick='loadBio(\"zh\")'>这里</a>。",
+            story: "故事",
+            ukulele: "弹琴",
+            perception: "PERCEPTION",
+            other: "杂思"
         }
-    </script>
+    };
+
+    // Keep track of the current language
+    let currentLanguage = 'en'; // Default language is English
+
+    // Function to toggle language
+    function toggleLanguage() {
+        currentLanguage = currentLanguage === 'zh' ? 'en' : 'zh'; // Switch language
+
+        // Update text content for each element
+        document.getElementById('title').innerText = translations[currentLanguage].title;
+        document.getElementById('description').innerText = translations[currentLanguage].description;
+        document.getElementById('secret').innerHTML = translations[currentLanguage].secret;
+
+        // Update button labels
+        document.getElementById('btn-story').innerText = translations[currentLanguage].story;
+        document.getElementById('btn-ukulele').innerText = translations[currentLanguage].ukulele;
+        document.getElementById('btn-perception').innerText = translations[currentLanguage].perception;
+        document.getElementById('btn-other').innerText = translations[currentLanguage].other;
+    }
+
+    // Function to load biography content dynamically
+    function loadBio(language) {
+        const bioPath = language === 'en' ? 'bio_en.html' : 'bio_ch.html';
+        fetch(bioPath)
+            .then(response => response.text())
+            .then(data => {
+                document.querySelector('.content').innerHTML = data;
+            })
+            .catch(err => console.error('Error loading biography:', err));
+    }
+</script>
 </head>
 <body>
     <div class="content">
-        <h1 id="title">欢迎访问我的网站</h1>
-        <p id="description">这是一个导航页/主页</p>
-        <p id="secret">想知道更多的秘密？请访问 <a href="bio_ch.html" target="_blank">这里</a>。</p>
-        <div class="button-container">
-            <button class="button" id="btn-story" onclick="location.href='story.html'">故事</button>
-            <button class="button" id="btn-ukulele" onclick="location.href='ukulele.html'">弹琴</button>
-            <button class="button" id="btn-perception" onclick="location.href='perception.html'">PERCEPTION</button>
-            <button class="button" id="btn-other" onclick="location.href='other.html'">杂思</button>
-        </div>
-        <div class="button-container">
-            <!-- Language toggle button -->
-            <button class="button" onclick="toggleLanguage()">中文/English</button>
-        </div>
+    <h1 id="title">Welcome to my website</h1>
+    <p id="description">This is a navigation/home page</p>
+    <p id="secret">Want to know more secrets? Visit <a href="#" onclick="loadBio('en')">here</a>.</p>
+    <div class="button-container">
+        <button class="button" id="btn-story" onclick="location.href='story.html'">Story</button>
+        <button class="button" id="btn-ukulele" onclick="location.href='ukulele.html'">Ukulele</button>
+        <button class="button" id="btn-perception" onclick="location.href='perception.html'">PERCEPTION</button>
+        <button class="button" id="btn-other" onclick="location.href='other.html'">Thoughts</button>
     </div>
+    <div class="button-container">
+        <!-- Language toggle button -->
+        <button class="button" onclick="toggleLanguage()">中文/English</button>
+    </div>
+</div>
 </body>
 </html>
