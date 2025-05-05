@@ -20,21 +20,31 @@
       top: 1rem;
       left: 1rem;
     }
-    .nav-buttons a {
-      margin-right: 1rem;
-      padding: 0.5rem 1rem;
-      background-color: #3498db;
+    .button-container {
+      position: fixed;
+      top: 1rem;
+      right: 1rem; /* Align buttons to the top-right corner */
+      z-index: 1000;
+      display: flex;
+      gap: 10px; /* Add space between buttons */
+    }
+    /* Style for the buttons */
+    .button-container a {
+      display: inline-block;
+      background: rgba(0, 0, 0, 0.5);
       color: white;
+      padding: 10px 15px;
       text-decoration: none;
       border-radius: 5px;
+      font-size: 14px;
     }
-    .nav-buttons a:hover {
-      background-color: #2980b9;
+    .button-container a:hover {
+      background: #45a049; /* Green color on hover */
     }
   </style>
 </head>
 <body>
-  <div class="nav-buttons">
+  <div class="button-container">
     <a href="bio_en.html">English/英文</a>
     <a href="index.html">返回首页</a>
   </div>
