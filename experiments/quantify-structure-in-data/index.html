@@ -359,22 +359,22 @@ L_train，计算 learned-bits 曲线 <code>C(N) = (log V − L_train)·N / log 2
 </table>
 
 <figure>
-  <img src="20260821_2032_width_ts_sweep/C_vs_N_by_fs_w4.png" alt="C vs N w=4">
+  <img src="20260821_2032_width_ts_sweep/figures/C_vs_N_by_fs_w4.png" alt="C vs N w=4">
   <figcaption><b>C_vs_N_by_fs_w4.png</b> — w_t = w_s = 4 的 C~N 曲线（seed=1000）。x 轴：数据集大小 N（线性）；y 轴：learned bits C（bits）。
   每个 f_s 一条线：实线+marker 为实测点，同色虚线为分段线性拟合第二段。</figcaption>
 </figure>
 <figure>
-  <img src="20260821_2032_width_ts_sweep/C_vs_N_by_fs_w8.png" alt="C vs N w=8">
+  <img src="20260821_2032_width_ts_sweep/figures/C_vs_N_by_fs_w8.png" alt="C vs N w=8">
   <figcaption><b>C_vs_N_by_fs_w8.png</b> — 同上，w_t = w_s = 8。</figcaption>
 </figure>
 <figure>
-  <img src="20260821_2032_width_ts_sweep/slope_jitter_vs_width.png" alt="slope jitter vs width">
+  <img src="20260821_2032_width_ts_sweep/figures/slope_jitter_vs_width.png" alt="slope jitter vs width">
   <figcaption><b>slope_jitter_vs_width.png</b> — x 轴：宽度 w（对数坐标，w_t = w_s，d=2）；
   y 轴：slope jitter，即拐点之后相邻数据点间 dC/dN 的标准差（bits/sample）。散点为各 f_s × seed 的取值（3 seeds），实线为每 f_s 在 w=4 与 w=8 之间的线性趋势。</figcaption>
 </figure>
 
-<p class="note">生成时间：2026-08-22。数据来源：各子文件夹 results/summary.json 与 checkpoint 内的 loss 历史；
-图表原始文件位于远端 cephfs 同名 experiments 目录。</p>
+<p class="note">生成时间：2026-08-22。本页仅公开 figures；原始数据（results/summary.json 与 checkpoint 内的 loss 历史）保存在本地 mirror
+与远端 cephfs 同名 experiments 目录，未随本站发布。</p>
 
 </body>
 </html>
