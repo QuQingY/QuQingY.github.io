@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<title>quantify structure in data — 实验汇总</title>
+<style>
+  body { font-family: -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+         max-width: 1120px; margin: 0 auto; padding: 24px 32px 80px;
+         color: #222; line-height: 1.6; }
+  h1 { font-size: 26px; border-bottom: 3px solid #333; padding-bottom: 8px; }
+  h2 { font-size: 20px; margin-top: 56px; border-bottom: 2px solid #999;
+       padding-bottom: 6px; }
+  h3 { font-size: 16px; margin-top: 28px; color: #444; }
+  code { background: #f2f2f2; padding: 1px 5px; border-radius: 3px;
+         font-size: 13px; }
+  table { border-collapse: collapse; margin: 12px 0 20px; font-size: 13.5px;
+          width: 100%; }
+  th, td { border: 1px solid #ccc; padding: 5px 10px; text-align: right; }
+  th { background: #f0f0f0; text-align: center; }
+  td:first-child, th:first-child { text-align: left; }
+  tr:nth-child(even) td { background: #fafafa; }
+  table.meta td { text-align: left; }
+  table.meta td:first-child { width: 170px; color: #555; background: #fafafa; }
+  figure { margin: 18px 0 30px; }
+  img { max-width: 100%; border: 1px solid #ddd; border-radius: 4px; }
+  figcaption { font-size: 13.5px; color: #444; margin-top: 8px; }
+  figcaption b { color: #222; }
+  .toc { background: #f7f7f7; border: 1px solid #ddd; border-radius: 6px;
+         padding: 12px 22px; font-size: 14px; }
+  .toc ol { margin: 6px 0; }
+  .note { font-size: 13px; color: #666; }
+</style>
+</head>
+<body>
+
+<h1>实验汇总：分段线性拟合估计 structural fraction</h1>
+
+<p>测量框架：训练学生网络拟合含结构标签与随机标签的数据集，记录最终训练损失
+L_train，计算 learned-bits 曲线 <code>C(N) = (log V − L_train)·N / log 2</code>，
+对 C~N 做两段线性最小二乘拟合（联合搜索拐点使总残差最小），以第二段斜率
+<code>s2 / log2V</code> 作为 structural fraction f_s 的估计量。</p>
+
+<h3>所有实验共用的设置</h3>
+<table class="meta">
+  <tr><td>输入维度 D / 类别数 V</td><td>10 / 10（log2V = 3.3219）</td></tr>
+  <tr><td>验证集大小 N_val</td><td>200</td></tr>
+  <tr><td>优化器</td><td>full-batch Adam，lr = 1e-3，cosine 衰减至 0，周期 30,000 epochs</td></tr>
+  <tr><td>早停（仅前 7 个实验）</td><td>每 500 epochs 检查，相对改善 &lt; 3e-4 连续 4 次则停止；30k 为硬上限</td></tr>
+  <tr><td>数据采样</td><td>非嵌套：每个 N 独立采样；每个 seed 一个 teacher</td></tr>
+  <tr><td>图中展示 seed</td><td>1000（C~N 曲线图与 loss 曲线图均为单 seed 原始点，不做平均）</td></tr>
+  <tr><td>拟合报告量</td><td>s1 = 第一段斜率（bits/样本）；N* = 拟合拐点；s2 = 第二段斜率；R² = 两段拟合优度；均为逐 seed 拟合后的中位数（3 seeds 时附 min–max）</td></tr>
+</table>
+
+<div class="toc">
+<b>目录（按运行时间排序，与 <code>mirror/experiments/</code> 子文件夹一一对应）</b>
+<ol>
+  <li><a href="#r1">20260817_1138 — 标签侧协议基线，N∈[80, 20000]</a></li>
+  <li><a href="#r2">20260817_1544 — 标签侧协议，密集网格 N∈[50, 2000]，d=2</a></li>
+  <li><a href="#r3">20260817_1715 — 标签侧协议，d=10，无 LayerNorm</a></li>
+  <li><a href="#r4">20260818_0808 — d=10 无 LN 的 loss 曲线诊断（重训 30 runs）</a></li>
+  <li><a href="#r5">20260818_0859 — 标签侧协议，d=10，学生加 LayerNorm</a></li>
+  <li><a href="#r6">20260818_1517 — GMM 输入侧协议（无 teacher）</a></li>
+  <li><a href="#r7">20260818_2113 — 双簇输入 teacher-student，双侧 LN，早停</a></li>
+  <li><a href="#r8">20260819_1738 — 双簇 TS，无早停，单 seed（CPU）</a></li>
+  <li><a href="#r9">20260820_0824 — Oracle-gate + 线性单纯形 teacher</a></li>
+  <li><a href="#r10">20260821_2032 — 双簇 TS 宽度扫描 w∈{4, 8}（仅图）</a></li>
+</ol>
+</div>
+
+<!-- ══════════════════════════ run 1 ══════════════════════════ -->
+<h2 id="r1">1. 20260817_1138_pwfit_fs_estimation</h2>
+<table class="meta">
+  <tr><td>协议</td><td>标签侧：输入 x ~ N(0, I₁₀) 无结构；结构在标签中——比例 f_s 的样本标签为 teacher(x) 的 argmax，其余为均匀随机标签</td></tr>
+  <tr><td>Teacher</td><td>MLP w=10, d=2，无 bias，带 BatchNorm head（标签均衡用）</td></tr>
+  <tr><td>Student</td><td>MLP w=10, d=2，无 bias，无 norm</td></tr>
+  <tr><td>N 网格</td><td>[80, 20000]，14 个对数点</td></tr>
+  <tr><td>f_s / seeds</td><td>{0, 0.1, 0.3, 0.5, 0.7, 0.9} × {1000, 1007, 1014} = 252 runs</td></tr>
+  <tr><td>训练 / 硬件</td><td>早停开；CPU 48 workers；总时长 1214 s</td></tr>
+</table>
+
+<figure>
+  <img src="20260817_1138_pwfit_fs_estimation/figures/C_vs_N_by_fs.png" alt="C vs N">
+  <figcaption><b>C_vs_N_by_fs.png</b> — x 轴：数据集大小 N（线性）；y 轴：learned bits C（bits）。
+  每个 f_s 一条线：实线+marker 为 seed=1000 的实测点，同色虚线为分段线性拟合的第二段（拐点 x* 至网格右端）。</figcaption>
+</figure>
+<figure>
+  <img src="20260817_1138_pwfit_fs_estimation/figures/C_vs_N_by_fs_loglog.png" alt="C vs N loglog">
+  <figcaption><b>C_vs_N_by_fs_loglog.png</b> — 与上图相同的数据，x、y 轴均为对数坐标。</figcaption>
+</figure>
+
+<h3>拟合结果（3 seeds 中位数，min–max）</h3>
+<table>
+  <tr><th>f_s</th><th>s1</th><th>N*</th><th>s2/log2V</th><th>R²</th><th>final train loss</th><th>final val loss</th></tr>
+  <tr><td>0</td><td>4.384 (4.224–4.393)</td><td>142</td><td>−0.001</td><td>0.643</td><td>2.014</td><td>2.970</td></tr>
+  <tr><td>0.1</td><td>4.488 (3.926–4.762)</td><td>142</td><td>0.003</td><td>0.737</td><td>2.010</td><td>2.669</td></tr>
+  <tr><td>0.3</td><td>0.159 (0.132–3.628)</td><td>4273 (142–11721)</td><td>0.059 (0.053–0.069)</td><td>0.993</td><td>1.950</td><td>2.154</td></tr>
+  <tr><td>0.5</td><td>0.466 (0.437–0.468)</td><td>10441 (3866–11721)</td><td>0.159 (0.153–0.160)</td><td>0.999</td><td>1.770</td><td>1.749</td></tr>
+  <tr><td>0.7</td><td>0.944 (0.904–4.053)</td><td>3633 (142–11721)</td><td>0.301 (0.284–0.307)</td><td>0.999</td><td>1.461</td><td>1.502</td></tr>
+  <tr><td>0.9</td><td>1.748 (1.674–1.763)</td><td>11721 (5611–11721)</td><td>0.522 (0.507–0.558)</td><td>0.9998</td><td>0.948</td><td>1.267</td></tr>
+</table>
+
+<!-- ══════════════════════════ run 2 ══════════════════════════ -->
+<h2 id="r2">2. 20260817_1544_pwfit_fs_estimation_dense50_2000</h2>
+<table class="meta">
+  <tr><td>协议</td><td>同实验 1（标签侧，d_t=d_s=2，无 norm），N 网格改为密集小区间</td></tr>
+  <tr><td>N 网格</td><td>[50, 2000]，28 个对数点</td></tr>
+  <tr><td>f_s / seeds</td><td>{0, 0.1, 0.3, 0.5, 0.7, 0.9} × 3 seeds = 504 runs</td></tr>
+  <tr><td>训练 / 硬件</td><td>早停开；CPU 48 workers；总时长 2011 s</td></tr>
+</table>
+
+<figure>
+  <img src="20260817_1544_pwfit_fs_estimation_dense50_2000/figures/C_vs_N_by_fs.png" alt="C vs N seed1000">
+  <figcaption><b>C_vs_N_by_fs.png</b> — 坐标轴与线型同实验 1（seed=1000）。</figcaption>
+</figure>
+<figure>
+  <img src="20260817_1544_pwfit_fs_estimation_dense50_2000/figures/C_vs_N_by_fs_seed1007.png" alt="C vs N seed1007">
+  <figcaption><b>C_vs_N_by_fs_seed1007.png</b> — 同一组测量在 seed=1007 上的 C~N 曲线与第二段拟合。</figcaption>
+</figure>
+<figure>
+  <img src="20260817_1544_pwfit_fs_estimation_dense50_2000/figures/C_vs_N_by_fs_seed1014.png" alt="C vs N seed1014">
+  <figcaption><b>C_vs_N_by_fs_seed1014.png</b> — seed=1014。</figcaption>
+</figure>
+
+<h3>拟合结果（3 seeds 中位数，min–max）</h3>
+<table>
+  <tr><th>f_s</th><th>s1</th><th>N*</th><th>s2/log2V</th><th>R²</th><th>final train loss</th><th>final val loss</th></tr>
+  <tr><td>0</td><td>3.315 (3.220–3.363)</td><td>184</td><td>−0.031</td><td>0.911</td><td>0.947</td><td>23.05</td></tr>
+  <tr><td>0.1</td><td>3.320 (3.303–3.354)</td><td>178</td><td>−0.026</td><td>0.901</td><td>1.017</td><td>15.00</td></tr>
+  <tr><td>0.3</td><td>3.345 (3.273–3.348)</td><td>184</td><td>0.011 (0.003–0.012)</td><td>0.907</td><td>0.837</td><td>24.74</td></tr>
+  <tr><td>0.5</td><td>3.267 (3.242–3.356)</td><td>198</td><td>0.092 (0.085–0.093)</td><td>0.980</td><td>0.741</td><td>14.96</td></tr>
+  <tr><td>0.7</td><td>3.285 (3.277–3.363)</td><td>231</td><td>0.221 (0.219–0.241)</td><td>0.993</td><td>0.345</td><td>19.88</td></tr>
+  <tr><td>0.9</td><td>3.309 (3.306–3.310)</td><td>297</td><td>0.452 (0.437–0.480)</td><td>0.997</td><td>0.026</td><td>18.66</td></tr>
+</table>
+
+<!-- ══════════════════════════ run 3 ══════════════════════════ -->
+<h2 id="r3">3. 20260817_1715_pwfit_fs_estimation_d10_dense50_2000</h2>
+<table class="meta">
+  <tr><td>协议</td><td>同实验 2（标签侧，密集网格），teacher 与 student 深度改为 d=10，student 仍无 norm</td></tr>
+  <tr><td>f_s / seeds</td><td>6 档 × 3 seeds = 504 runs</td></tr>
+  <tr><td>训练 / 硬件</td><td>早停开；H100 GPU 12 workers；总时长 5499 s</td></tr>
+  <tr><td>备注</td><td>全部 run 的实际停止 epoch 在 4k–15k 之间（早停触发），没有任何 run 走完 30k cosine；s1 中位数 0.58–3.19，R² 低至 0.63</td></tr>
+</table>
+
+<figure>
+  <img src="20260817_1715_pwfit_fs_estimation_d10_dense50_2000/figures/C_vs_N_by_fs.png" alt="C vs N d10">
+  <figcaption><b>C_vs_N_by_fs.png</b> — 坐标轴与线型同实验 1（seed=1000）。注意 f_s=0.5 在 N≈295 处 C 降至 −165 bits。</figcaption>
+</figure>
+
+<h3>拟合结果（3 seeds 中位数，min–max）</h3>
+<table>
+  <tr><th>f_s</th><th>s1</th><th>N*</th><th>s2/log2V</th><th>R²</th><th>final train loss</th><th>final val loss</th></tr>
+  <tr><td>0</td><td>1.722 (1.094–2.841)</td><td>283</td><td>0.060 (0.002–0.066)</td><td>0.631</td><td>1.194</td><td>93.60</td></tr>
+  <tr><td>0.1</td><td>0.582 (0.571–1.411)</td><td>884</td><td>0.028 (−0.236–0.088)</td><td>0.713</td><td>1.307</td><td>33.38</td></tr>
+  <tr><td>0.3</td><td>0.996 (0.833–1.795)</td><td>666</td><td>0.120 (0.111–0.169)</td><td>0.844</td><td>1.280</td><td>30.89</td></tr>
+  <tr><td>0.5</td><td>1.293 (1.042–1.447)</td><td>884</td><td>0.129 (−0.037–0.138)</td><td>0.948</td><td>1.074</td><td>40.09</td></tr>
+  <tr><td>0.7</td><td>2.991 (2.261–3.259)</td><td>244</td><td>0.318 (0.281–0.343)</td><td>0.978</td><td>0.679</td><td>46.27</td></tr>
+  <tr><td>0.9</td><td>3.186 (2.362–3.599)</td><td>211</td><td>0.536 (0.524–0.541)</td><td>0.986</td><td>0.530</td><td>66.71</td></tr>
+</table>
+
+<!-- ══════════════════════════ run 4 ══════════════════════════ -->
+<h2 id="r4">4. 20260818_0808_loss_curves_d10</h2>
+<table class="meta">
+  <tr><td>目的</td><td>诊断实验 3 的 C~N 曲线异常：在相同 d_t=d_s=10、无 LN 设置下重训并记录完整 loss 历史</td></tr>
+  <tr><td>规模</td><td>f_s 6 档 × N ∈ {196, 295, 585, 1010, 2000} × seed=1000 = 30 runs（GPU）</td></tr>
+  <tr><td>训练</td><td>早停开（check=500 / patience=4 / tol=3e-4），30k cosine 上限</td></tr>
+</table>
+
+<figure>
+  <img src="20260818_0808_loss_curves_d10/figures/loss_curves_d10.png" alt="loss curves d10">
+  <figcaption><b>loss_curves_d10.png</b> — 6 个子图，每个 f_s 一个。x 轴：epoch（对数）；y 轴：loss（nats，各子图共享）。
+  实线 = train loss，点线 = val loss（同分布新样本，teacher 标签）；颜色区分 N；灰色虚线 = chance ln(10) ≈ 2.303。
+  曲线右端位置不同是因为各 run 早停 epoch 不同。</figcaption>
+</figure>
+<p class="note">本实验只有图，无数值汇总表（results 未落盘到 mirror）。</p>
+
+<!-- ══════════════════════════ run 5 ══════════════════════════ -->
+<h2 id="r5">5. 20260818_0859_pwfit_fs_estimation_d10ln_dense50_2000</h2>
+<table class="meta">
+  <tr><td>协议</td><td>同实验 3（标签侧 d=10），student 每个隐藏层改为 Linear → LayerNorm → ReLU（带仿射参数）</td></tr>
+  <tr><td>f_s / seeds</td><td>6 档 × 3 seeds = 504 runs</td></tr>
+  <tr><td>训练 / 硬件</td><td>早停开；H100 GPU 12 workers；总时长 8649 s</td></tr>
+</table>
+
+<figure>
+  <img src="20260818_0859_pwfit_fs_estimation_d10ln_dense50_2000/figures/C_vs_N_by_fs.png" alt="C vs N d10 LN">
+  <figcaption><b>C_vs_N_by_fs.png</b> — 坐标轴与线型同实验 1（seed=1000）。</figcaption>
+</figure>
+
+<h3>拟合结果（3 seeds 中位数，min–max）</h3>
+<table>
+  <tr><th>f_s</th><th>s1</th><th>N*</th><th>s2/log2V</th><th>R²</th><th>final train loss</th><th>final val loss</th></tr>
+  <tr><td>0</td><td>3.107 (2.864–3.190)</td><td>567</td><td>−0.010</td><td>0.966</td><td>0.271</td><td>11.67</td></tr>
+  <tr><td>0.1</td><td>3.089 (2.849–3.183)</td><td>514</td><td>0.067 (0.034–0.087)</td><td>0.961</td><td>0.173</td><td>10.21</td></tr>
+  <tr><td>0.3</td><td>2.773 (2.683–3.051)</td><td>587</td><td>0.089 (0.020–0.113)</td><td>0.975</td><td>0.241</td><td>8.68</td></tr>
+  <tr><td>0.5</td><td>3.054 (2.770–3.110)</td><td>567</td><td>0.202 (0.189–0.257)</td><td>0.977</td><td>0.150</td><td>8.44</td></tr>
+  <tr><td>0.7</td><td>2.864 (2.639–3.246)</td><td>640</td><td>0.357 (0.261–0.404)</td><td>0.985</td><td>0.109</td><td>7.54</td></tr>
+  <tr><td>0.9</td><td>3.030 (2.646–3.045)</td><td>851</td><td>0.480 (0.272–0.480)</td><td>0.994</td><td>0.087</td><td>6.70</td></tr>
+</table>
+
+<!-- ══════════════════════════ run 6 ══════════════════════════ -->
+<h2 id="r6">6. 20260818_1517_gmm_fs_estimation</h2>
+<table class="meta">
+  <tr><td>协议</td><td>GMM 输入侧（无 teacher）：结构样本取自 V=10 类条件高斯混合——均值向量两两正交、成对距离 sep=4、簇内 σ=1，标签 = 簇编号；随机样本 x ~ N(0, I₁₀) + 均匀标签。验证集为 GMM 新样本 + 真实簇标签</td></tr>
+  <tr><td>Student</td><td>MLP w=10, d=2，无 bias，无 norm</td></tr>
+  <tr><td>N 网格 / f_s / seeds</td><td>[50, 2000] × 28 点；6 档 × 3 seeds = 504 runs</td></tr>
+  <tr><td>训练 / 硬件</td><td>早停开；H100 GPU 12 workers；总时长 4264 s</td></tr>
+</table>
+
+<figure>
+  <img src="20260818_1517_gmm_fs_estimation/figures/C_vs_N_by_fs.png" alt="C vs N GMM">
+  <figcaption><b>C_vs_N_by_fs.png</b> — 坐标轴与线型同实验 1（seed=1000）。</figcaption>
+</figure>
+
+<h3>拟合结果（3 seeds 中位数，min–max）</h3>
+<table>
+  <tr><th>f_s</th><th>s1</th><th>N*</th><th>s2/log2V</th><th>R²</th><th>final train loss</th><th>final val loss</th></tr>
+  <tr><td>0</td><td>3.212 (3.160–3.295)</td><td>191</td><td>−0.035</td><td>0.903</td><td>1.007</td><td>34.99</td></tr>
+  <tr><td>0.1</td><td>3.311 (3.310–3.357)</td><td>184</td><td>−0.013</td><td>0.919</td><td>1.012</td><td>22.43</td></tr>
+  <tr><td>0.3</td><td>3.375 (3.359–3.380)</td><td>191</td><td>0.093 (0.090–0.101)</td><td>0.980</td><td>0.706</td><td>22.85</td></tr>
+  <tr><td>0.5</td><td>3.330 (3.308–3.350)</td><td>217</td><td>0.263 (0.260–0.268)</td><td>0.992</td><td>0.322</td><td>16.47</td></tr>
+  <tr><td>0.7</td><td>3.329 (3.324–3.334)</td><td>277</td><td>0.446 (0.437–0.452)</td><td>0.997</td><td>0.029</td><td>12.82</td></tr>
+  <tr><td>0.9</td><td>3.318 (3.317–3.325)</td><td>475</td><td>0.666 (0.657–0.674)</td><td>0.999</td><td>9.6e-8</td><td>8.30</td></tr>
+</table>
+
+<!-- ══════════════════════════ run 7 ══════════════════════════ -->
+<h2 id="r7">7. 20260818_2113_twocluster_ts</h2>
+<table class="meta">
+  <tr><td>协议</td><td>双簇输入 teacher-student：输入 x = μ_c + z，z ~ N(0, I₁₀)，两个簇中心 μ_A = +2u、μ_B = −2u（u 为随机单位向量，簇间距 sep=4）。A 簇（比例 f_s）标签 = teacher(x) argmax；B 簇直接分配均匀随机标签。验证集为 A 簇新样本 + teacher 标签</td></tr>
+  <tr><td>Teacher</td><td>MLP w=10, d=10，每层 Linear → LayerNorm → ReLU，保留 BatchNorm head</td></tr>
+  <tr><td>Student</td><td>MLP w=10, d=10，Linear → LayerNorm → ReLU</td></tr>
+  <tr><td>N 网格 / f_s / seeds</td><td>[50, 2000] × 28 点；6 档 × 3 seeds = 504 runs</td></tr>
+  <tr><td>训练 / 硬件</td><td>早停开（实际停止 epoch 6.5k–30k 不等）；H100 GPU 12 workers；总时长 3114 s</td></tr>
+</table>
+
+<figure>
+  <img src="20260818_2113_twocluster_ts/figures/C_vs_N_by_fs.png" alt="C vs N twocluster">
+  <figcaption><b>C_vs_N_by_fs.png</b> — 坐标轴与线型同实验 1（seed=1000）。小 N 处若干点 C &lt; 0（对应 run 的最终 train loss 高于 chance）。</figcaption>
+</figure>
+<figure>
+  <img src="20260818_2113_twocluster_ts/figures/s2_over_log2V_vs_fs.png" alt="s2 vs fs">
+  <figcaption><b>s2_over_log2V_vs_fs.png</b> — x 轴：真实 f_s；y 轴：估计量 s2/log2V（每个 seed 一个点，marker/颜色对应 f_s）。
+  灰色实线 = 理论参考 y = x（即 s2 = f_s·log2V）。</figcaption>
+</figure>
+<figure>
+  <img src="20260818_2113_twocluster_ts/figures/loss_curves.png" alt="loss curves twocluster">
+  <figcaption><b>loss_curves.png</b> — 布局同实验 4：6 个子图（每 f_s 一个），x = epoch（对数），y = loss（nats）；
+  实线 = train loss，点线 = val loss（A 簇新样本 + teacher 标签）；颜色区分 N ∈ {196, 295, 585, 1010, 2000}；灰虚线 = chance。曲线长度差异来自早停。</figcaption>
+</figure>
+
+<h3>拟合结果（3 seeds 中位数，min–max）</h3>
+<table>
+  <tr><th>f_s</th><th>s1</th><th>N*</th><th>s2/log2V</th><th>s2/(f_s·log2V)</th><th>R²</th><th>final train loss</th><th>final val loss</th></tr>
+  <tr><td>0</td><td>2.560 (2.403–3.078)</td><td>574</td><td>0.012</td><td>—</td><td>0.965</td><td>0.175</td><td>11.91</td></tr>
+  <tr><td>0.1</td><td>3.073 (2.955–3.146)</td><td>455</td><td>0.043</td><td>0.435</td><td>0.957</td><td>0.239</td><td>9.83</td></tr>
+  <tr><td>0.3</td><td>2.963 (2.767–3.082)</td><td>488</td><td>0.118</td><td>0.393</td><td>0.968</td><td>0.214</td><td>7.24</td></tr>
+  <tr><td>0.5</td><td>3.008 (2.773–3.014)</td><td>554</td><td>0.202</td><td>0.405</td><td>0.975</td><td>0.239</td><td>6.79</td></tr>
+  <tr><td>0.7</td><td>3.034 (2.813–3.147)</td><td>567</td><td>0.379</td><td>0.541</td><td>0.989</td><td>0.154</td><td>7.02</td></tr>
+  <tr><td>0.9</td><td>3.050 (3.040–3.100)</td><td>719</td><td>0.531</td><td>0.589</td><td>0.985</td><td>0.100</td><td>7.37</td></tr>
+</table>
+
+<!-- ══════════════════════════ run 8 ══════════════════════════ -->
+<h2 id="r8">8. 20260819_1738_twocluster_ts_noearly_seed1000</h2>
+<table class="meta">
+  <tr><td>协议</td><td>同实验 7（双簇 TS，双侧 LN，sep=4），两处改动：① 关闭早停，所有 run 跑满 30,000 epochs cosine；② 单 seed=1000，N 网格减至 21 点（N≤250 保留 5 点：50/75/112/167/225）</td></tr>
+  <tr><td>规模 / 硬件</td><td>6 档 × 21 点 × 1 seed = 126 runs；CPU（8 核配额）12 workers；总时长 3375 s。训练循环由 DataLoader 改为直接全批量步进（等梯度，CPU 上约 2.7× 加速）</td></tr>
+</table>
+
+<figure>
+  <img src="20260819_1738_twocluster_ts_noearly_seed1000/figures/C_vs_N_by_fs.png" alt="C vs N noearly">
+  <figcaption><b>C_vs_N_by_fs.png</b> — 坐标轴与线型同实验 1（seed=1000）。所有 run 训练预算一致（30k 完整 cosine）。</figcaption>
+</figure>
+<figure>
+  <img src="20260819_1738_twocluster_ts_noearly_seed1000/figures/s2_over_log2V_vs_fs.png" alt="s2 vs fs noearly">
+  <figcaption><b>s2_over_log2V_vs_fs.png</b> — 坐标轴同实验 7；单 seed，每 f_s 一个点。</figcaption>
+</figure>
+<figure>
+  <img src="20260819_1738_twocluster_ts_noearly_seed1000/figures/loss_curves.png" alt="loss curves noearly">
+  <figcaption><b>loss_curves.png</b> — 布局同实验 7，N ∈ {225, 295, 585, 1010, 2000}。所有曲线等长（无早停，均跑满 30k）。</figcaption>
+</figure>
+
+<h3>拟合结果（单 seed=1000）</h3>
+<table>
+  <tr><th>f_s</th><th>s1</th><th>N*</th><th>s2/log2V</th><th>s2/(f_s·log2V)</th><th>R²</th><th>final train loss</th><th>final val loss</th></tr>
+  <tr><td>0</td><td>3.173</td><td>438</td><td>0.062</td><td>—</td><td>0.988</td><td>0.521</td><td>15.73</td></tr>
+  <tr><td>0.1</td><td>3.152</td><td>488</td><td>0.055</td><td>0.550</td><td>0.979</td><td>0.266</td><td>16.12</td></tr>
+  <tr><td>0.3</td><td>3.287</td><td>495</td><td>0.135</td><td>0.449</td><td>0.994</td><td>0.203</td><td>9.47</td></tr>
+  <tr><td>0.5</td><td>3.146</td><td>565</td><td>0.203</td><td>0.405</td><td>0.988</td><td>0.212</td><td>11.59</td></tr>
+  <tr><td>0.7</td><td>3.226</td><td>523</td><td>0.378</td><td>0.540</td><td>0.998</td><td>0.110</td><td>11.12</td></tr>
+  <tr><td>0.9</td><td>3.318</td><td>488</td><td>0.648</td><td>0.720</td><td>0.994</td><td>0.035</td><td>11.10</td></tr>
+</table>
+
+<!-- ══════════════════════════ run 9 ══════════════════════════ -->
+<h2 id="r9">9. 20260820_0824_oracle_gate_ts_noearly_seed1000</h2>
+<table class="meta">
+  <tr><td>协议</td><td>Oracle-gate teacher-student：输入 x = (g, z)，z ~ N(0, I₉)，第一维为显式门控坐标——结构样本 g=+1（比例 f_s），随机样本 g=−1（均匀随机标签）。结构标签由固定的线性单纯形 teacher 产生：10 个单位向量 w_v ∈ R⁹ 两两内积 −1/9（正则单纯形，所有 seed 共用），y = argmax_v w_v·z。验证集为 g=+1 新样本 + teacher 标签</td></tr>
+  <tr><td>Student</td><td>MLP w=16, d=2，Linear → LayerNorm → ReLU；无 weight decay</td></tr>
+  <tr><td>N 网格 / f_s / seeds</td><td>21 点（同实验 8）；f_s ∈ {0, 0.1, 0.3, 0.5, 0.7, 0.9, 1.0}（含端点 1.0）；seed=1000 = 147 runs</td></tr>
+  <tr><td>训练 / 硬件</td><td>无早停，跑满 30k cosine；H100 GPU 12 workers；总时长 1886 s</td></tr>
+</table>
+
+<figure>
+  <img src="20260820_0824_oracle_gate_ts_noearly_seed1000/figures/C_vs_N_by_fs.png" alt="C vs N oracle">
+  <figcaption><b>C_vs_N_by_fs.png</b> — 坐标轴与线型同实验 1（seed=1000，含 f_s=1 共 7 条曲线）。</figcaption>
+</figure>
+<figure>
+  <img src="20260820_0824_oracle_gate_ts_noearly_seed1000/figures/s2_over_log2V_vs_fs.png" alt="s2 vs fs oracle">
+  <figcaption><b>s2_over_log2V_vs_fs.png</b> — x 轴：真实 f_s；y 轴：估计的结构比例。
+  实心点 = s2/log2V；空心点 = 端点校准估计 (s2(f_s) − s2(0)) / (s2(1) − s2(0))；灰实线 = 理论 y = x。单 seed。</figcaption>
+</figure>
+<figure>
+  <img src="20260820_0824_oracle_gate_ts_noearly_seed1000/figures/loss_curves.png" alt="loss curves oracle">
+  <figcaption><b>loss_curves.png</b> — 7 个子图（含 f_s=1），坐标轴与线型同实验 8；val loss 为 g=+1 新样本上的 teacher 标签损失。</figcaption>
+</figure>
+<figure>
+  <img src="20260820_0824_oracle_gate_ts_noearly_seed1000/figures/train_loss_vs_N.png" alt="train loss vs N">
+  <figcaption><b>train_loss_vs_N.png</b> — x 轴：N（线性）；y 轴：最终 train loss（nats，对数坐标）。每 f_s 一条线（seed=1000），灰虚线 = chance ln(10)。</figcaption>
+</figure>
+<figure>
+  <img src="20260820_0824_oracle_gate_ts_noearly_seed1000/figures/train_loss_vs_N_logx.png" alt="train loss vs N logx">
+  <figcaption><b>train_loss_vs_N_logx.png</b> — 同上数据，x 轴改为对数坐标。</figcaption>
+</figure>
+
+<h3>拟合结果（单 seed=1000）</h3>
+<table>
+  <tr><th>f_s</th><th>s1</th><th>N*</th><th>s2/log2V</th><th>s2/(f_s·log2V)</th><th>端点校准</th><th>R²</th><th>val acc @N=2000</th><th>final train loss</th><th>final val loss</th></tr>
+  <tr><td>0</td><td>3.301</td><td>381</td><td>−0.042</td><td>—</td><td>0.000</td><td>0.982</td><td>0.120</td><td>0.547</td><td>13.07</td></tr>
+  <tr><td>0.1</td><td>3.289</td><td>395</td><td>−0.016</td><td>~0</td><td>0.025</td><td>0.989</td><td>0.355</td><td>0.465</td><td>14.63</td></tr>
+  <tr><td>0.3</td><td>3.298</td><td>431</td><td>0.214</td><td>0.715</td><td>0.246</td><td>0.993</td><td>0.795</td><td>0.119</td><td>12.41</td></tr>
+  <tr><td>0.5</td><td>3.320</td><td>537</td><td>0.426</td><td>0.851</td><td>0.449</td><td>0.999</td><td>0.855</td><td>9.6e-4</td><td>10.32</td></tr>
+  <tr><td>0.7</td><td>3.321</td><td>821</td><td>0.611</td><td>0.873</td><td>0.626</td><td>0.999</td><td>0.870</td><td>6.7e-7</td><td>7.43</td></tr>
+  <tr><td>0.9</td><td>3.331</td><td>1522</td><td>0.892</td><td>0.991</td><td>0.896</td><td>0.9999</td><td>0.935</td><td>1.0e-7</td><td>3.74</td></tr>
+  <tr><td>1.0</td><td>3.322</td><td>771</td><td>1.0000</td><td>1.000</td><td>1.000</td><td>1.0000</td><td>0.930</td><td>1.4e-8</td><td>1.79</td></tr>
+</table>
+
+<h3>附：val loss 最低点 vs 终值（实验 9，seed=1000，选自 checkpoint 的完整 loss 历史）</h3>
+<table>
+  <tr><th>f_s</th><th>N</th><th>min val loss</th><th>final val loss</th><th>final / min</th><th>最低点 epoch</th><th>final val acc</th></tr>
+  <tr><td>0.0</td><td>225</td><td>2.470</td><td>43.852</td><td>17.8</td><td>16</td><td>0.085</td></tr>
+  <tr><td>0.0</td><td>2000</td><td>2.318</td><td>2.933</td><td>1.3</td><td>78</td><td>0.120</td></tr>
+  <tr><td>0.1</td><td>225</td><td>2.426</td><td>30.157</td><td>12.4</td><td>39</td><td>0.195</td></tr>
+  <tr><td>0.1</td><td>2000</td><td>1.748</td><td>2.222</td><td>1.3</td><td>452</td><td>0.355</td></tr>
+  <tr><td>0.3</td><td>225</td><td>2.082</td><td>21.444</td><td>10.3</td><td>189</td><td>0.315</td></tr>
+  <tr><td>0.3</td><td>2000</td><td>0.386</td><td>2.465</td><td>6.4</td><td>1084</td><td>0.795</td></tr>
+  <tr><td>0.5</td><td>225</td><td>1.505</td><td>10.318</td><td>6.9</td><td>380</td><td>0.470</td></tr>
+  <tr><td>0.5</td><td>2000</td><td>0.262</td><td>2.654</td><td>10.1</td><td>642</td><td>0.855</td></tr>
+  <tr><td>0.7</td><td>225</td><td>1.625</td><td>8.186</td><td>5.0</td><td>380</td><td>0.510</td></tr>
+  <tr><td>0.7</td><td>2000</td><td>0.185</td><td>2.509</td><td>13.5</td><td>764</td><td>0.870</td></tr>
+  <tr><td>0.9</td><td>225</td><td>1.095</td><td>5.466</td><td>5.0</td><td>319</td><td>0.645</td></tr>
+  <tr><td>0.9</td><td>2000</td><td>0.121</td><td>1.755</td><td>14.5</td><td>1291</td><td>0.935</td></tr>
+  <tr><td>1.0</td><td>225</td><td>0.825</td><td>3.863</td><td>4.7</td><td>452</td><td>0.725</td></tr>
+  <tr><td>1.0</td><td>2000</td><td>0.082</td><td>0.817</td><td>10.0</td><td>1291</td><td>0.930</td></tr>
+</table>
+
+<!-- ══════════════════════════ run 10 ══════════════════════════ -->
+<h2 id="r10">10. 20260821_2032_width_ts_sweep</h2>
+<table class="meta">
+  <tr><td>协议</td><td>双簇输入 teacher-student（sep=4，协议同实验 7），teacher 与 student 均带 LayerNorm，宽度扫描 w_t = w_s ∈ {4, 8}，d=2。f_s ∈ {0, 0.3, 0.7, 1.0}，3 seeds；w=4 时 N 至 380，w=8 时 N 至 1050</td></tr>
+  <tr><td>备注</td><td>该目录在 mirror 中只有图（无 results/summary.json），以上配置信息读自图题与坐标轴</td></tr>
+</table>
+
+<figure>
+  <img src="20260821_2032_width_ts_sweep/C_vs_N_by_fs_w4.png" alt="C vs N w=4">
+  <figcaption><b>C_vs_N_by_fs_w4.png</b> — w_t = w_s = 4 的 C~N 曲线（seed=1000）。x 轴：数据集大小 N（线性）；y 轴：learned bits C（bits）。
+  每个 f_s 一条线：实线+marker 为实测点，同色虚线为分段线性拟合第二段。</figcaption>
+</figure>
+<figure>
+  <img src="20260821_2032_width_ts_sweep/C_vs_N_by_fs_w8.png" alt="C vs N w=8">
+  <figcaption><b>C_vs_N_by_fs_w8.png</b> — 同上，w_t = w_s = 8。</figcaption>
+</figure>
+<figure>
+  <img src="20260821_2032_width_ts_sweep/slope_jitter_vs_width.png" alt="slope jitter vs width">
+  <figcaption><b>slope_jitter_vs_width.png</b> — x 轴：宽度 w（对数坐标，w_t = w_s，d=2）；
+  y 轴：slope jitter，即拐点之后相邻数据点间 dC/dN 的标准差（bits/sample）。散点为各 f_s × seed 的取值（3 seeds），实线为每 f_s 在 w=4 与 w=8 之间的线性趋势。</figcaption>
+</figure>
+
+<p class="note">生成时间：2026-08-22。数据来源：各子文件夹 results/summary.json 与 checkpoint 内的 loss 历史；
+图表原始文件位于远端 cephfs 同名 experiments 目录。</p>
+
+</body>
+</html>
