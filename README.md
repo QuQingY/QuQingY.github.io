@@ -4,8 +4,8 @@ Personal homepage of Qingyu Qu (屈清宇), served via GitHub Pages at <https://
 
 ## Structure
 
-- `index.html` — homepage
-- `bio_en.html` / `bio_ch.html` — biography (EN / 中文)
+- `index.html` — homepage (includes biography)
+- `bio_ch.html` — 中文简介
 - `perception.html`, `story.html`, `ukulele.html`, `other.html` — personal pages
 - `experiments/` — experiment logs, one subfolder per log
   - `experiments/<log-title>/index.html` — log page
