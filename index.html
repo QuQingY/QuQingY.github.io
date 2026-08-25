@@ -99,7 +99,24 @@
 
         /* Publication entries */
         .pub-item {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 18px;
+            align-items: flex-start;
             margin-bottom: 24px;
+        }
+        .pub-thumb {
+            flex-shrink: 0;
+            width: 180px;
+        }
+        .pub-thumb img {
+            width: 100%;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .pub-text {
+            flex: 1;
+            min-width: 250px;
         }
         .pub-title {
             font-weight: bold;
@@ -173,12 +190,17 @@
     <!-- Publications -->
     <h2>Publications</h2>
     <div class="pub-item">
+        <div class="pub-thumb">
+            <img src="imgs/entropy_scaling.png" alt="Entropy scaling: spin relaxation time vs eigenmicrostate entropy">
+        </div>
+        <div class="pub-text">
         <div class="pub-title">Scaling of Relaxation and Entropy in Buckled Colloidal Monolayers</div>
         <div class="pub-authors">Yongming Zhang, <strong>Qingyu Qu</strong>, Qian-Yuan Tang, and Xiaoguang Ma</div>
         <div class="pub-venue">
             <a href="https://doi.org/10.1103/jvzh-lwbh" target="_blank">Physical Review Letters <strong>137</strong>, 048201</a>, 2026 (Editors' Suggestion)
         </div>
         <a class="pub-link-btn" href="https://journals.aps.org/prl/pdf/10.1103/jvzh-lwbh" target="_blank">PDF</a>
+        </div>
     </div>
 
     <!-- Experiments -->
@@ -228,12 +250,17 @@
     <!-- 论文发表 -->
     <h2>论文发表</h2>
     <div class="pub-item">
+        <div class="pub-thumb">
+            <img src="imgs/entropy_scaling.png" alt="Entropy scaling: spin relaxation time vs eigenmicrostate entropy">
+        </div>
+        <div class="pub-text">
         <div class="pub-title">Scaling of Relaxation and Entropy in Buckled Colloidal Monolayers</div>
         <div class="pub-authors">Yongming Zhang, <strong>Qingyu Qu</strong>, Qian-Yuan Tang, and Xiaoguang Ma</div>
         <div class="pub-venue">
             <a href="https://doi.org/10.1103/jvzh-lwbh" target="_blank">Physical Review Letters <strong>137</strong>, 048201</a>, 2026 (Editors' Suggestion)
         </div>
         <a class="pub-link-btn" href="https://journals.aps.org/prl/pdf/10.1103/jvzh-lwbh" target="_blank">PDF</a>
+        </div>
     </div>
 
     <!-- 实验 -->
