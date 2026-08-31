@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>实验总结 — 双簇 Teacher-Student 协议下 C~N 曲线随宽度的变化</title>
+<style>
+  body { font-family: "Segoe UI", "Microsoft YaHei", sans-serif; max-width: 960px;
+         margin: 0 auto; padding: 24px 32px; color: #222; line-height: 1.65; }
+  h1 { font-size: 1.5em; border-bottom: 2px solid #333; padding-bottom: 8px; }
+  h2 { font-size: 1.2em; margin-top: 2em; border-bottom: 1px solid #bbb;
+       padding-bottom: 4px; }
+  h3 { font-size: 1.05em; margin-top: 1.4em; }
+  table { border-collapse: collapse; margin: 12px 0; font-size: 0.92em; }
+  th, td { border: 1px solid #999; padding: 5px 10px; text-align: left; }
+  th { background: #eee; }
+  code { background: #f2f2f2; padding: 1px 5px; border-radius: 3px;
+         font-family: Consolas, monospace; font-size: 0.9em; }
+  pre { background: #f6f6f6; border: 1px solid #ddd; border-radius: 6px;
+        padding: 12px 16px; overflow-x: auto; font-size: 0.85em; }
+  pre code { background: none; padding: 0; }
+  figure { margin: 18px 0; text-align: center; }
+  figure img { max-width: 100%; border: 1px solid #ddd; border-radius: 4px; }
+  figcaption { font-size: 0.95em; color: #333; margin-top: 8px; }
+  figcaption .fig-label { font-weight: 700; color: #111; margin-right: 6px; }
+  .note { background: #fbf8e8; border-left: 4px solid #d8c34a;
+          padding: 8px 14px; margin: 12px 0; font-size: 0.92em; }
+  .back { font-size: 0.95em; margin-bottom: 16px; }
+  .back a { color: #0066cc; text-decoration: none; }
+  .back a:hover { text-decoration: underline; }
+  ul { margin: 6px 0; }
+</style>
+</head>
+<body>
+
+<h1>实验总结：双簇 Teacher-Student 协议下 C~N 曲线随 Teacher/Student 宽度的变化</h1>
+
+<p class="back"><a href="../">&larr; 返回实验日志目录</a></p>
+
+<p><b>运行目录</b>：<code>experiments/20260821_2032_width_ts_sweep</code>（远程 cephfs）；
+<b>脚本</b>：<code>width_ts_sweep.py</code>（run 目录内留有副本）；<b>日期</b>：2026-08-21 至 2026-08-22。</p>
+
+<h2>1. 实验任务</h2>
+<p>在双簇（two-cluster）teacher-student 协议下，当 teacher 与 student 等宽（w<sub>t</sub> = w<sub>s</sub> = w）、深度均为 2 时，对 6 个宽度 w ∈ {4, 8, 16, 32, 64, 128}、4 个结构比例 f<sub>s</sub> ∈ {0.0, 0.3, 0.7, 1.0}，扫描数据集大小 N，记录训练结束后学生记住的信息量 C 随 N 变化的曲线（C~N 曲线），并量化曲线拐点之后相邻点斜率的抖动（slope jitter）。</p>
+
+<h2>2. 实验设置（协议）</h2>
+
+<h3>2.1 数据生成（双簇协议，与 20260819 twocluster 运行一致）</h3>
+<ul>
+  <li><b>输入维数 D = 10，类别数 V = 10</b>（log<sub>2</sub>V ≈ 3.322 bits/样本）。</li>
+  <li>每个 seed 随机取一个单位向量 u，两个簇中心为 μ<sub>A</sub> = +(sep/2)·u、μ<sub>B</sub> = −(sep/2)·u，<b>sep = 4.0</b>。样本 x = μ<sub>c</sub> + z，z ~ N(0, I<sub>D</sub>)。由于两簇中心分离，样本属于哪个簇可以从 x 上读出来。</li>
+  <li>训练集共 N 个样本：前 round(f<sub>s</sub>·N) 个来自簇 A（"结构化"部分），标签由 teacher 网络给出；其余 N − round(f<sub>s</sub>·N) 个来自簇 B（"随机"部分），标签为均匀随机整数。</li>
+  <li><b>验证集</b>：200 个来自簇 A 的新样本 + teacher 标签。</li>
+  <li>数据非嵌套：每个 (seed, N) 独立抽样；每个 seed 对应一个独立初始化的 teacher。</li>
+  <li>随机数种子（与 20260819 运行逐行一致）：teacher 初始化 <code>torch.manual_seed(seed)</code>；簇中心生成器 <code>seed*7919+13</code>；训练数据生成器 <code>seed*1000003+N</code>；验证集生成器 <code>seed+777</code>；student 初始化 <code>set_seed(seed+1)</code>。</li>
+</ul>
+
+<h3>2.2 模型</h3>
+<ul>
+  <li><b>Teacher（TeacherMLPLN）</b>：bias-free Linear → LayerNorm → ReLU 的隐层块 × d<sub>t</sub> = 2，之后接 BatchNorm1d 头（BN 头）+ bias-free Linear 投影到 V 类。BN 头在 batch 维上对每个类别的 logit 归一化，使 teacher 的 argmax 标签近似类别平衡（每样本标签信息量 ≈ log<sub>2</sub>V）。teacher 参数生成后冻结。</li>
+  <li><b>Student（StudentMLPLN）</b>：同样的 Linear → LayerNorm → ReLU 隐层块 × d<sub>s</sub> = 2，最后直接接 bias-free Linear 读出到 V 类（无 BN 头）。</li>
+  <li>两个模型类定义逐行复制自 20260819 运行的 <code>run.py</code>（当时 cephfs 上的 <code>protocols/strucfrac.py</code> 版本较旧，不含 LN 模型，因此本脚本自包含）。</li>
+  <li><b>teacher 标签的 batch 依赖</b>：teacher 在生成标签时置于 train 模式，对"簇 A 训练样本 + 验证集样本"整体做一次前向，BN 头的 batch 统计由这批数据计算（与 N 无关的部分固定）；生成标签后 teacher 回到 eval 模式。</li>
+</ul>
+
+<h3>2.3 训练</h3>
+<ul>
+  <li>全批量 Adam，lr = 1e-3，cosine 衰减到 0，<b>30000 epochs，无早停</b>。</li>
+  <li>训练过程中在约 60 个对数间隔的 checkpoint 记录完整曲线：train loss、结构化/随机部分的分别 loss（l1/l2）与精确记忆比例（em1/em2）、验证 loss 与验证准确率。</li>
+</ul>
+
+<h3>2.4 运行规模与执行</h3>
+<ul>
+  <li><b>seeds</b>：{1000, 1007, 1014}；探针阶段只用 seed = 1000。</li>
+  <li><b>总 run 数 708</b>：w ∈ {4,8,16,32} 的 468 runs 在 60 核 CPU 机器（10.230.1.20）上以 28 进程池完成（每进程 torch 2 线程）；w ∈ {64,128} 的 240 runs 在 H100 GPU 机器（10.230.1.34）上以 12 进程池共用一张 GPU 完成。</li>
+  <li>每 (w, f<sub>s</sub>) 组完成后立即将 per-run JSON 追加写入 <code>results/main_runs.json</code> 作为 checkpoint，中断后续跑自动跳过已完成的组。</li>
+</ul>
+
+<h2>3. 代码实现（两阶段网格）</h2>
+
+<h3>3.1 阶段一：探针（probe）</h3>
+<p>目的：为每个宽度定位 f<sub>s</sub> = 0（纯随机标签）曲线的容量拐点 N*<sub>0</sub>。对每个宽度，在 [max(16, w), 200·w] 内取 12 个对数等间隔的 N，只跑 f<sub>s</sub> = 0、seed = 1000（每宽度 12 runs，共 72 runs）。对得到的 C~N 曲线做连续两段线性拟合（见 4.2），拟合的拐点位置即 N*<sub>0</sub>。实测结果：</p>
+<table>
+  <tr><th>w</th><th>4</th><th>8</th><th>16</th><th>32</th><th>64</th><th>128</th></tr>
+  <tr><td>N*<sub>0</sub></td><td>47</td><td>130</td><td>466</td><td>932</td><td>3018</td><td>9769</td></tr>
+  <tr><td>拟合 R²</td><td>0.63</td><td>0.95</td><td>0.98</td><td>0.99</td><td>0.999</td><td>0.999</td></tr>
+</table>
+
+<h3>3.2 阶段二：主扫描（main）</h3>
+<p>每个宽度的 N 网格围绕自己的 N*<sub>0</sub> 生成，共 10 个点（w = 4 时因下限 16 合并为 9 点），同一宽度内 4 个 f<sub>s</sub> 共享该网格：</p>
+<ul>
+  <li>拐点前 3 点：N*<sub>0</sub> × {1/8, 1/4, 1/2}（下限 16）；</li>
+  <li>拐点处 1 点：N*<sub>0</sub>；</li>
+  <li>拐点后 6 点：N*<sub>0</sub> × {1.5, 2.1, 2.9, 4.1, 5.8, 8.0}（上限 80000）。</li>
+</ul>
+<table>
+  <tr><th>w</th><th>N 网格（实际取整后）</th></tr>
+  <tr><td>4</td><td>16, 24, 47, 70, 99, 136, 193, 273, 376</td></tr>
+  <tr><td>8</td><td>16, 32, 65, 130, 195, 273, 377, 533, 754, 1040</td></tr>
+  <tr><td>16</td><td>58, 116, 233, 466, 699, 979, 1351, 1911, 2703, 3728</td></tr>
+  <tr><td>32</td><td>116, 233, 466, 932, 1398, 1957, 2703, 3821, 5406, 7456</td></tr>
+  <tr><td>64</td><td>377, 754, 1509, 3018, 4527, 6338, 8752, 12374, 17504, 24144</td></tr>
+  <tr><td>128</td><td>1221, 2442, 4884, 9769, 14654, 20515, 28330, 40053, 56660, 78152</td></tr>
+</table>
+<p>每个 (w, f<sub>s</sub>, N) 组合跑 3 个 seed，共 6 宽 × 4 f<sub>s</sub> × ~10 N × 3 seeds ≈ 708 runs（含探针 72）。</p>
+
+<h3>3.3 输出文件</h3>
+<ul>
+  <li><code>results/probe_runs.json</code>、<code>results/main_runs.json</code>：每个 run 一条记录，含最终 train loss、C_bits、分区指标、val 指标、运行时长，以及全部 checkpoint 的完整 loss 曲线；</li>
+  <li><code>results/grids.json</code>：各宽度的 N*<sub>0</sub> 与主网格；</li>
+  <li><code>results/summary.json</code>：每条 (w, f<sub>s</sub>, seed) 曲线的分段拟合参数与 jitter；</li>
+  <li><code>figures/</code>：8 张图（见第 5 节）。</li>
+</ul>
+
+<h2>4. 数据与量的定义</h2>
+
+<h3>4.1 学习比特数 C（C~N 曲线的纵轴）</h3>
+<p>对每个 run，取训练结束（30000 epochs）时的全训练集交叉熵 L<sub>train</sub>，定义每样本学习比特数与总量：</p>
+<pre><code>bits/sample = max(ln V − L_train, 0) / ln 2
+C (bits)    = bits/sample × N</code></pre>
+<p>其中 ln V 是 V 类均匀标签的熵（交叉熵的随机水平）。L<sub>train</sub> 越低说明学生对训练标签拟合得越死，C 越大。每条 C~N 曲线就是一个 (w, f<sub>s</sub>, seed) 下约 10 个 N 值对应的 C 值连成的折线。</p>
+
+<h3>4.2 连续两段线性拟合（虚线与拐点的来源）</h3>
+<p>对每条 C~N 曲线，在所有内部网格点上搜索候选拐点 x*，用设计矩阵 [1, N, max(N−x*, 0)] 做最小二乘，取残差最小的 x* 作为拐点 N*。输出参数：segment-1 斜率 s1、segment-2 斜率 s2、拐点位置、R²。图中的同色虚线画的是拟合的 segment-2 段（从 N* 到最大 N）。</p>
+
+<h3>4.3 斜率抖动（slope jitter）</h3>
+<p>对一条 C~N 曲线，取拐点 N* <b>之后</b>的所有网格点，计算相邻两点之间的斜率 s<sub>i</sub> = (C<sub>i+1</sub> − C<sub>i</sub>) / (N<sub>i+1</sub> − N<sub>i</sub>)（单位 bits/sample），jitter = 这些斜率的标准差。每条曲线用自己的拟合拐点；若拟合退化（拐点落在网格末尾、拐后不足 3 点，f<sub>s</sub> = 1 的曲线常如此），则退回使用同宽度 f<sub>s</sub> = 0 曲线的拐点作为阈值。jitter 图中每个数据点是 3 个 seed 的均值，error bar 为 3 个 seed 的标准差。</p>
+<div class="note">注意：各宽度网格的拐后点间隔 ΔN 随宽度同比放大（网格按 N*<sub>0</sub> 的倍数生成），大宽度下每个斜率是对更大 N 窗口的平均。</div>
+
+<h3>4.4 训练损失斜率抖动（train-loss slope jitter）</h3>
+<p>C 由 L<sub>train</sub> 乘以 N 得到，逐点噪声随之被放大 N 倍。为去掉这一放大作用，对同一批 run 直接取训练结束时的 L<sub>train</sub> 对 N 的折线，在拐点之后（阈值与 4.3 相同，含 f<sub>s</sub> = 0 回退）计算相邻点斜率 s<sub>i</sub> = (L<sub>i+1</sub> − L<sub>i</sub>) / (N<sub>i+1</sub> − N<sub>i</sub>)，取标准差，单位 nats/sample（L<sub>train</sub> 为自然对数交叉熵）。</p>
+
+<h2>5. 图</h2>
+
+<h3>5.1 C~N 曲线（每宽度一张，共 6 张）</h3>
+<ul>
+  <li><b>横轴</b>：数据集大小 N（线性）；<b>纵轴</b>：学习比特数 C（bits）。</li>
+  <li><b>实线+标记</b>：seed = 1000 的实测数据点，4 种颜色/标记对应 4 个 f<sub>s</sub>（蓝圆 0.0、绿三角 0.3、紫倒三角 0.7、灰菱形 1.0）。</li>
+  <li><b>同色虚线</b>：该曲线连续两段线性拟合的 segment-2 段。</li>
+</ul>
+
+<figure><img src="20260821_2032_width_ts_sweep/figures/C_vs_N_by_fs_w4.png" alt="w=4"><figcaption><span class="fig-label">Figure 1.</span>C~N 曲线，w = 4</figcaption></figure>
+<figure><img src="20260821_2032_width_ts_sweep/figures/C_vs_N_by_fs_w8.png" alt="w=8"><figcaption><span class="fig-label">Figure 2.</span>C~N 曲线，w = 8</figcaption></figure>
+<figure><img src="20260821_2032_width_ts_sweep/figures/C_vs_N_by_fs_w16.png" alt="w=16"><figcaption><span class="fig-label">Figure 3.</span>C~N 曲线，w = 16</figcaption></figure>
+<figure><img src="20260821_2032_width_ts_sweep/figures/C_vs_N_by_fs_w32.png" alt="w=32"><figcaption><span class="fig-label">Figure 4.</span>C~N 曲线，w = 32</figcaption></figure>
+<figure><img src="20260821_2032_width_ts_sweep/figures/C_vs_N_by_fs_w64.png" alt="w=64"><figcaption><span class="fig-label">Figure 5.</span>C~N 曲线，w = 64</figcaption></figure>
+<figure><img src="20260821_2032_width_ts_sweep/figures/C_vs_N_by_fs_w128.png" alt="w=128"><figcaption><span class="fig-label">Figure 6.</span>C~N 曲线，w = 128</figcaption></figure>
+
+<h3>5.2 斜率抖动图（2 张，同一数据的两种纵轴）</h3>
+<ul>
+  <li><b>横轴</b>：宽度 w（线性，w<sub>t</sub> = w<sub>s</sub>，d = 2）；<b>纵轴</b>：slope jitter（bits/sample），第一张线性、第二张对数。</li>
+  <li><b>每个宽度 4 个点</b>：对应 4 个 f<sub>s</sub>（颜色/标记同上），点的纵坐标为 3 个 seed 的 jitter 均值，<b>error bar</b> 为 3 个 seed 的标准差。</li>
+  <li><b>线</b>：同一 f<sub>s</sub> 的点按宽度顺序相连。</li>
+  <li>每个点参与计算的斜率个数记录在 <code>results/summary.json</code> 的 <code>n_slopes</code> 字段（f<sub>s</sub> 越大，拐点越靠右，拐后点数越少）。</li>
+</ul>
+
+<figure><img src="20260821_2032_width_ts_sweep/figures/slope_jitter_vs_width.png" alt="jitter linear"><figcaption><span class="fig-label">Figure 7.</span>slope jitter vs width（纵轴线性）</figcaption></figure>
+<figure><img src="20260821_2032_width_ts_sweep/figures/slope_jitter_vs_width_logy.png" alt="jitter log-y"><figcaption><span class="fig-label">Figure 8.</span>slope jitter vs width（纵轴对数）</figcaption></figure>
+
+<h3>5.3 训练损失斜率抖动图（2 张，同一数据的两种纵轴）</h3>
+<ul>
+  <li><b>横轴</b>：宽度 w（线性）；<b>纵轴</b>：train-loss slope jitter（nats/sample），第一张线性、第二张对数。</li>
+  <li>点、error bar、连线的含义与 5.2 相同；拐点阈值与 C 版 jitter 完全一致（含 f<sub>s</sub> = 0 回退）。</li>
+</ul>
+
+<figure><img src="20260821_2032_width_ts_sweep/figures/slope_jitter_loss_vs_width.png" alt="loss jitter linear"><figcaption><span class="fig-label">Figure 9.</span>train-loss slope jitter vs width（纵轴线性）</figcaption></figure>
+<figure><img src="20260821_2032_width_ts_sweep/figures/slope_jitter_loss_vs_width_logy.png" alt="loss jitter log-y"><figcaption><span class="fig-label">Figure 10.</span>train-loss slope jitter vs width（纵轴对数）</figcaption></figure>
+
+<h2>6. 数值记录（seed = 1000，来自 summary.json 与探针拟合）</h2>
+<ul>
+  <li>f<sub>s</sub> = 0 曲线的容量拐点（探针拟合）：N*<sub>0</sub> = 47 / 130 / 466 / 932 / 3018 / 9769（w = 4/8/16/32/64/128）；探针拟合的 segment-1 斜率 s1 ≈ 2.1 / 3.1 / 2.8 / 3.5 / 3.3 / 3.2 bits/sample（log<sub>2</sub>V = 3.32）。</li>
+  <li>f<sub>s</sub> = 0 曲线在最大 N 处的 C 值（约等于平台高度）：w=4 约 100 bits、w=8 约 450、w=16 约 1100、w=32 约 3000、w=64 约 9000、w=128 约 26000 bits。</li>
+  <li>f<sub>s</sub> = 1 曲线在各自最大 N 处的 C/N：w=16 约 2.66、w=32 约 2.95、w=64 约 3.07、w=128 约 3.24 bits/sample（log<sub>2</sub>V = 3.32）。</li>
+  <li>jitter 均值（3 seeds）：w=128 处 4 个 f<sub>s</sub> 均落在约 0.08–0.14 bits/sample；w=4 的 f<sub>s</sub> = 1.0 均值为 1.77（seed 间标准差约 1.4）。</li>
+</ul>
+
+</body>
+</html>
