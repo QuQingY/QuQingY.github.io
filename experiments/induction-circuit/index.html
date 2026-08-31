@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Induction Circuit 图集（重绘版）</title>
+<style>
+:root{--ink:#172033;--muted:#5d687d;--blue:#2864dc;--red:#a52232;--line:#dce3ef;--wash:#f5f8fd}
+body{max-width:980px;margin:36px auto;padding:0 22px 54px;color:var(--ink);font:16px/1.65 system-ui,-apple-system,"Noto Sans SC",sans-serif}
+h1{font-size:29px;line-height:1.3;margin:0 0 8px}
+h2{margin-top:40px;font-size:21px;border-top:1px solid var(--line);padding-top:14px}
+h3{font-size:16px;margin:18px 0 4px;color:var(--blue)}
+.sub,.note{color:var(--muted)}
+.card{background:var(--wash);border-left:4px solid var(--blue);padding:14px 18px;border-radius:4px}
+table{width:100%;border-collapse:collapse;margin:12px 0;font-size:14px}
+th,td{padding:8px 10px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+th{background:#f7f9fc}
+code{background:#f0f3f8;padding:1px 5px;border-radius:4px;font-size:13.5px}
+figure{margin:20px 0}
+img{max-width:100%;border:1px solid var(--line);border-radius:8px}
+figcaption{color:var(--muted);font-size:14px;margin-top:6px}
+ul{padding-left:22px}
+</style>
+</head>
+<body>
+
+<h1>Induction Circuit 图集（重绘版）</h1>
+<p class="back" style="font-size:0.95rem;margin-bottom:16px"><a href="../../" style="color:#0066cc;text-decoration:none">&larr; 返回主页</a></p>
+<p class="sub">按指定图清单重画的 7 张图与 1 个表格。本页只记录每个图/表的做法、数据来源与图中各成分的含义，不作推断与结论。</p>
+
+<div class="card">
+<h3 style="margin-top:0">模型与通用设置</h3>
+<ul>
+<li>Checkpoint：<code>out/openwebtext/induction_head_toy/cl1024_seeds_sweep/seed_777/model.pt</code>。两层 GPT，12 heads / 层，d_model=768，词表 50304，context 1024，训练 seed 777，weight decay 0.1。</li>
+<li>受控序列：长度 32，形式 <code>… A₁ B₁ … A₂ B₂ …</code>，A₁=位置 8、B₁=位置 9、A₂=位置 24、B₂=位置 25；A、B 只在这两对位置出现，其余 28 个位置是互不相同、且不同于 A/B 的随机 token id。生成器为 <code>verify_openwebtext_induction_circuit.py</code> 中的 <code>controlled_batch</code>。</li>
+<li>绘图脚本：<code>analysis/make_redrawn_figures.py</code>（本次新写）。它复用 <code>verify_openwebtext_induction_circuit.py</code> 的手工前向（逐 head 残差、QK score、attention pattern），并读取已有实验输出（JSON / CSV / HTML 表）。在远程 CPU 上运行，输出目录 <code>analysis_outputs/redrawn_figures/</code>。</li>
+<li>三头 induction machine 的定义（图 6、7 与表 8 使用）：去掉两层 MLP，第一层只保留 L1-H0 与 L1-H6 的 attention 输出，第二层只保留 L2-H9 的 attention 输出；embedding、位置编码、LayerNorm 与 unembedding 原样保留。前向实现与 <code>visualize_three_head_induction_machine.py</code> 一致。</li>
+</ul>
+</div>
+
+<h2>图 1：第二层各 head 的 induction score</h2>
+<p><strong>做法与数据。</strong>读取 <code>analysis_outputs/openwebtext_seed777/summary.json</code> 中的 <code>layer2_induction_scores</code>。该数组由 <code>verify_openwebtext_induction_circuit.py</code> 在 32 条受控序列（生成 seed 20260727）上测得：对第二层每个 head，取 query = A₂（位置 24）对 key = B₁（位置 9）的 attention 概率，再对 32 条序列取平均。</p>
+<p><strong>图的构成。</strong>横轴为第二层 12 个 head（H0–H11），纵轴为 induction score。红色柱为最大值 H9 = 0.4689，其余为灰色；柱顶标注具体数值。</p>
+<figure><img src="redrawn_figures/fig1_l2_induction_scores.png" alt="fig1"><figcaption>图 1：L2 各 head 的 induction score（mean attention A₂→B₁）。</figcaption></figure>
+
+<h2>图 2：全局移除每个第一层 head 的输出后，A₂→B₁ attention 的下降</h2>
+<p><strong>做法与数据。</strong>由 <code>make_redrawn_figures.py</code> 现场计算（同一批 32 条受控序列，seed 20260727）。对第一层每个 head：从残差流中<strong>所有位置</strong>减去该 head 经 W_O 投影后的逐 head 输出向量，然后测量 L2-H9 的 A₂→B₁ attention。与位置级消融的区别在于：这里不指定干预位置，该 head 在每个 token 处的写入都被同时移除。两种计算方式：</p>
+<ul>
+<li><code>direct</code>：全局减去该 head 的输出后直接送入第二层，第一层 MLP 输出沿用未干预时的值；</li>
+<li><code>recomputed</code>：全局减去后，把修改后的残差重新通过第一层的 LayerNorm 与 MLP，再送入第二层。</li>
+</ul>
+<p><strong>图的构成。</strong>横轴为被全局消融的第一层 head，纵轴为 attention 下降量 = 基线 0.4689 − 消融后 attention（正值表示 attention 降低，负值表示升高）。蓝柱为 direct 变体，红柱为 recomputed 变体。数值记录：H0 全局移除 → direct 0.0155 / recomputed 0.0211（下降 0.453 / 0.448）；H6 全局移除 → direct 0.1299 / recomputed 0.0736（下降 0.339 / 0.395）；其余 head 的下降量绝对值均不超过 0.11。</p>
+<figure><img src="redrawn_figures/fig2_l1_head_global_ablation_drop.png" alt="fig2"><figcaption>图 2：逐 head 全局消融（所有位置）对 induction attention 的影响，两种 MLP 处理变体并列。</figcaption></figure>
+
+<h2>图 3：第一层各 head 的 previous-token score</h2>
+<p><strong>做法与数据。</strong>读取 <code>summary.json</code> 中的 <code>layer1_previous_token_scores</code>（32 条受控序列，seed 20260727）。previous-token score 定义为第一层某 head 的 attention(t→t−1) 对所有可见位置与所有序列的平均，即 attention 矩阵次对角线的均值。</p>
+<p><strong>图的构成。</strong>横轴为第一层 12 个 head，纵轴为 previous-token score。红色柱为最大值 H0 = 0.9753；柱顶标注数值。</p>
+<figure><img src="redrawn_figures/fig3_l1_previous_token_scores.png" alt="fig3"><figcaption>图 3：L1 各 head 的 previous-token score（mean attention t→t−1）。</figcaption></figure>
+
+<h2>图 4：第一层各 head 的 self-attention score</h2>
+<p><strong>做法与数据。</strong>读取 <code>analysis_outputs/openwebtext_seed777_l1h6_attention_pattern/summary.json</code> 中的 <code>all_heads</code> 列表（由 <code>analyze_l1h6_attention_pattern.py</code> 在 128 条受控序列上测得；该批序列额外在位置 16/17 放置了一对无关 token C₁/D₁）。self-attention score 定义为第一层某 head 的 attention(t→t) 对所有位置与所有序列的平均，即 attention 矩阵主对角线的均值。</p>
+<p><strong>图的构成。</strong>横轴为第一层 12 个 head，纵轴为 self-attention score。蓝色柱为最大值 H6 = 0.9770；柱顶标注数值。</p>
+<figure><img src="redrawn_figures/fig4_l1_self_attention_scores.png" alt="fig4"><figcaption>图 4：L1 各 head 的 self-attention score（mean attention t→t）。</figcaption></figure>
+
+<h2>图 5：注入 previous-token head 残差前后的 L2-H9 attention map + 逐 destination attention lift</h2>
+<p><strong>做法与数据。</strong>用 <code>controlled_batch</code> 生成 1 条受控序列（seed 20260727）：A = token 17859（位置 8 与 24），B = token 14278（位置 9 与 25），其余位置为互不相同的随机 token id。手工前向到第一层，取出 <strong>L1-H0 在 B₁ 位置（位置 9）经 W_O 投影后的逐 head 残差输出向量</strong>（即 <code>per_head_residual[:, 0, 9]</code>，维度 768，下称 H0(B₁) writer 向量）。对 A₂ 可见的每个候选 destination（位置 0–23，排除 B₁ 自身），把该向量<strong>加</strong>到 destination 已有的残差流上（add，不替换；其他位置不变，不重算第一层 MLP），重算第二层 attention，记录 A₂ query 对该 destination 的 attention lift。上半部分双热图演示 lift 最强的 destination（本序列上为位置 1），下半部分为全部 destination 的 lift 柱状图。</p>
+<p><strong>图的构成。</strong>上半部分：左图为未注入的 base 模型，右图为把 H0(B₁) 向量加到 key 位置 1 之后的模型；两图均为该单条序列上 L2-H9 的完整 attention 矩阵，横轴 key、纵轴 query，刻度标签为位置编号（0–31），共用同一色标（vmin=0、vmax=1.0；矩阵中存在 attention=1 的饱和格，如 query 0 对 key 0）。白色网格线与竖排标签标出 A₁(8)、B₁(9)、inj(演示 destination)、A₂(24)、B₂(25)；青色方框 = query A₂ × 注入的 key，绿色方框 = query A₂ × key B₁，两格内直接标注数值。下半部分：横轴为注入 destination（key 位置），纵轴为 A₂ query 的 attention lift（注入后 − base）；红色柱子为上方热图所用 destination，并标注其 lift 数值。数值记录（destination = 1）：base A₂→1 = 0.048、A₂→B₁ = 0.656；注入后 A₂→1 = 0.882、A₂→B₁ = 0.081；lift = 0.834。</p>
+<figure><img src="redrawn_figures/fig5_vector_injection_heatmaps.png" alt="fig5"><figcaption>图 5：上：base 与注入后（destination = 1）的 L2-H9 attention map；下：同一序列上 23 个 destination 的 A₂-query attention lift，红色柱子为热图演示所用 destination。</figcaption></figure>
+
+<h2>图 6：三头 induction machine 在合成序列上的逐位置 loss</h2>
+<p><strong>做法与数据。</strong>按上述三头机器定义做前向，在 256 条受控序列（生成 seed 20260730）上计算每个 logit 位置对下一 token 的 cross-entropy loss（softmax 取负对数）。实现与 <code>visualize_three_head_induction_machine.py</code> 相同。</p>
+<p><strong>图的构成。</strong>横轴为 logit 位置（0–30，位置 i 的 loss 对应预测位置 i+1 的 token），刻度标签为其中一条示例序列在该位置的 token id。红色实线为该示例序列的逐位置 loss；浅色线为 256 条序列的逐位置均值。两条竖虚线分别标出位置 8（A₁ 处，预测目标是 B₁）与位置 24（A₂ 处，预测目标是重复的 B₂，即 induction 位置）。数值记录：示例序列 A₁ 处 loss = 13.41、A₂ 处 = 6.50；batch 均值 A₁ 处 = 12.63、A₂ 处 = 7.12、其余位置平均 = 12.66。</p>
+<figure><img src="redrawn_figures/fig6_synthetic_loss.png" alt="fig6"><figcaption>图 6：合成 A B … A B 序列上三头机器的逐位置 next-token loss。</figcaption></figure>
+
+<h2>图 7：三头 induction machine 在一段自然语言上的逐 token loss</h2>
+<p><strong>做法与数据。</strong>读取 <code>analysis_outputs/openwebtext_seed777_three_head_real_induction/nearby_induction_token_prediction_table.html</code> 中的逐 token 预测表（由 <code>make_nearby_induction_prediction_table.py</code> 与 <code>add_real_text_prediction_window.py</code> 生成）。文本为一段关于 lava tube 的 OpenWebText 连续窗口；其中 <code>␠the</code>（logit 位置 338）→ <code>␠tube</code>（339）这一 token-pair 在位置 349/350 原样重复，构成一次 AB…AB，间隔 11 个 token。图中截取 logit 位置 333–355（23 个 token，AB…AB 两侧各多 5 个位置）。loss 列为三头机器在每个 logit 位置对真实下一 token 的 cross-entropy。</p>
+<p><strong>图的构成。</strong>横轴刻度标签为当前 token 的文本（<code>·</code> 表示 token 开头的空格；<code>?</code> 表示源文本中已损坏的字符），按 logit 位置 333–355 顺序水平排列。柱与红色折线是同一组 loss 数据的两种画法。背景色带标出四个特殊位置（图例中给出位置号）：淡黄 = 第一次 A（338），淡蓝 = 第一次 B（339），橙 = 第二次 A（349，induction query），蓝 = 第二次 B（350）。数值记录：第二次 A 处 loss = 6.282，第一次 A 处 = 8.562。</p>
+<figure><img src="redrawn_figures/fig7_natural_text_loss.png" alt="fig7"><figcaption>图 7：含一次 " the tube … the tube" 重复的真实文本窗口（截取 AB…AB 两侧各 5 个位置）上，三头机器的逐 token loss。</figcaption></figure>
+
+<h2>表 8：Harry Potter 文本上两次对 Potter 的预测</h2>
+<p><strong>做法与数据。</strong>读取 <code>harry_potter_prediction_window.html</code> 的逐 token 表（由 <code>make_named_pair_prediction_window.py</code> 生成）。文本段中完整的 BPE token-pair <code>␠Harry ␠Potter</code> 只出现两次：第一次在位置 331/332，第二次在 392/393，间隔 61 个 token。两个 Harry 位置的真实下一 token 都是 <code>␠Potter</code>，因此 P(␠Potter) = exp(−loss)。三头机器与完整 Transformer（全部 heads + MLP）在同一文本上分别前向。</p>
+<table>
+<tr><th>logit 位置</th><th>当前 token</th><th>真实下一 token</th><th>三头机器 top-1（概率）</th><th>三头机器 loss</th><th>三头机器 P(␠Potter)</th><th>完整模型 top-1（概率）</th><th>完整模型 loss</th><th>完整模型 P(␠Potter)</th></tr>
+<tr><td>331（第一次）</td><td><code>␠Harry</code></td><td><code>␠Potter</code></td><td><code>␠Luther</code>（1.51%）</td><td>6.549</td><td>0.14%</td><td><code>␠Potter</code>（6.84%）</td><td>2.682</td><td>6.84%</td></tr>
+<tr><td>392（第二次，induction query）</td><td><code>␠Harry</code></td><td><code>␠Potter</code></td><td><code>␠Potter</code>（3.24%）</td><td>3.431</td><td>3.24%</td><td><code>␠Potter</code>（81.86%）</td><td>0.200</td><td>81.87%</td></tr>
+</table>
+
+<h2>核查记录</h2>
+<p>针对两处观察到的现象，用独立重写的前向代码（<code>analysis/verify_redrawn_checks.py</code>，不调用 <code>attention_terms</code>，自行实现 QK score、causal mask、softmax 与逐 head 投影）做了核对：</p>
+<ul>
+<li><strong>图 2 中 H6 列（位置级版本，历史记录）。</strong>图 2 曾采用位置级消融（只在 B₁ 处移除各 head 的写入）。该版本的独立复算与 CSV 一致（偏差 &lt; 1e-5）：基线 A₂→B₁ attention = 0.46894；在 B₁ 移除 H0 → direct 0.01408 / recomputed 0.02528；在 B₁ 移除 H6 → direct 0.57583 / recomputed 0.53313（attention 升高，下降量为负）。作为对照，同一代码在 A₂ 移除 H6 → direct 0.10762 / recomputed 0.06575（下降 0.36–0.40）。H6 在 B₁ 与 A₂ 处的写入向量 L2 范数分别为 15.87 与 15.57（H0 在 B₁ 处为 14.86）。当前图 2 已改为全局消融（所有位置同时移除），H0 与 H6 均成为主要贡献头（见正文数值）。</li>
+<li><strong>图 5 的 lift 数值（单样本 vs 批均值）。</strong>图 5 曾固定 destination = 16，该单条序列上 A₂→16 的 lift 仅 0.104，小于原报告批均值（A₂ add lift ≈ 0.241）。独立复算（<code>diagnose_fig5_lift.py</code>）确认这是单样本/单 destination 的随机性而非 bug：同一干预在 256 条 batch 上 dest 16 的 lift 均值为 0.211；在这条序列的 23 个候选 destination 中，dest 16 的 lift 排第 16（最强为 dest 1，lift 0.834）。机制上，attention 经 softmax 归一化，dest 16 注入后 QK 由 4.50 升至 9.38，但竞争的 B₁ key QK 高达 11.10 不变，故归一化后 lift 被压缩。当前图 5 已改为：上半部分用 lift 最强的 destination（本序列 dest 1）做演示，下半部分列出全部 destination 的 lift 并标出演示柱子。</li>
+</ul>
+
+<h2>复现方式</h2>
+<ul>
+<li>绘图脚本：<code>analysis/make_redrawn_figures.py</code>（本地副本位于 <code>induction_reports/analysis/</code>）。</li>
+<li>运行环境：远程 <code>/cephfs/quqingyu/ComfyResearch/.venv/bin/python</code>（torch 2.6.0，CPU）。在 <code>/cephfs/quqingyu/physicl/analysis/</code> 目录下执行 <code>python make_redrawn_figures.py</code>，输出写入 <code>analysis_outputs/redrawn_figures/</code>。</li>
+<li>图 1–4 只读取已有 JSON/CSV；图 5、6 需要加载 checkpoint 做一次前向；图 7 与表 8 解析已有 HTML 预测表。运行同时输出 <code>redrawn_figures_meta.json</code> 记录关键数值。</li>
+<li>核查脚本：<code>analysis/verify_redrawn_checks.py</code>（独立重写的前向，核对图 2 数值）、<code>analysis/diagnose_fig5_lift.py</code>（图 5 lift 的单样本 vs 批均值分解）。</li>
+<li>被复用的既有脚本：<code>verify_openwebtext_induction_circuit.py</code>（手工前向与受控序列生成）、<code>analyze_l1h6_attention_pattern.py</code>（图 4 数据）、<code>visualize_three_head_induction_machine.py</code>（三头机器前向）、<code>make_nearby_induction_prediction_table.py</code> / <code>add_real_text_prediction_window.py</code> / <code>make_named_pair_prediction_window.py</code>（图 7、8 的源表）。</li>
+</ul>
+
+</body>
+</html>
