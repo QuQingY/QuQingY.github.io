@@ -63,7 +63,7 @@ L_train，计算 learned-bits 曲线 <code>C(N) = (log V − L_train)·N / log 2
   <li><a href="#r7">20260818_2113 — 双簇输入 teacher-student，双侧 LN，早停</a></li>
   <li><a href="#r8">20260819_1738 — 双簇 TS，无早停，单 seed（CPU）</a></li>
   <li><a href="#r9">20260820_0824 — Oracle-gate + 线性单纯形 teacher</a></li>
-  <li><a href="#r10">20260821_2032 — 双簇 TS 宽度扫描 w∈{4, 8}（仅图）</a></li>
+  <li><a href="#r10">20260821_2032 — 双簇 TS 宽度扫描 w∈{4,…,128}（含完整报告页）</a></li>
 </ol>
 </div>
 
@@ -354,26 +354,28 @@ L_train，计算 learned-bits 曲线 <code>C(N) = (log V − L_train)·N / log 2
 <!-- ══════════════════════════ run 10 ══════════════════════════ -->
 <h2 id="r10">10. 20260821_2032_width_ts_sweep</h2>
 <table class="meta">
-  <tr><td>协议</td><td>双簇输入 teacher-student（sep=4，协议同实验 7），teacher 与 student 均带 LayerNorm，宽度扫描 w_t = w_s ∈ {4, 8}，d=2。f_s ∈ {0, 0.3, 0.7, 1.0}，3 seeds；w=4 时 N 至 380，w=8 时 N 至 1050</td></tr>
-  <tr><td>备注</td><td>该目录在 mirror 中只有图（无 results/summary.json），以上配置信息读自图题与坐标轴</td></tr>
+  <tr><td>协议</td><td>双簇输入 teacher-student（sep=4，协议同实验 7），teacher 与 student 均带 LayerNorm，w_t = w_s = w，深度 d_t = d_s = 2。宽度 w ∈ {4, 8, 16, 32, 64, 128}，f_s ∈ {0, 0.3, 0.7, 1.0}，seeds {1000, 1007, 1014}</td></tr>
+  <tr><td>N 网格</td><td>两阶段：先以 f_s=0 探针（seed=1000）定各宽度容量拐点 N*₀ = 47 / 130 / 466 / 932 / 3018 / 9769，再围绕 N*₀ 生成每宽度 10 点主网格（拐点前 3 + 拐点 1 + 拐点后 6），同宽度内 4 个 f_s 共享</td></tr>
+  <tr><td>规模 / 硬件</td><td>共 708 runs：w ≤ 32 的 468 runs 在 60 核 CPU（28 进程池）；w ∈ {64, 128} 的 240 runs 在 H100 GPU（12 进程池）。无早停，跑满 30k cosine</td></tr>
+  <tr><td>完整报告</td><td><a href="20260821_2032_width_ts_sweep/summary.html">summary.html</a> — 实验设置、代码实现、量的定义、全部 10 张图的详细说明</td></tr>
 </table>
 
 <figure>
-  <img src="20260821_2032_width_ts_sweep/figures/C_vs_N_by_fs_w4.png" alt="C vs N w=4">
-  <figcaption><b>C_vs_N_by_fs_w4.png</b> — w_t = w_s = 4 的 C~N 曲线（seed=1000）。x 轴：数据集大小 N（线性）；y 轴：learned bits C（bits）。
-  每个 f_s 一条线：实线+marker 为实测点，同色虚线为分段线性拟合第二段。</figcaption>
+  <img src="20260821_2032_width_ts_sweep/figures/C_vs_N_by_fs_w32.png" alt="C vs N w=32">
+  <figcaption><b>C_vs_N_by_fs_w32.png</b> — w_t = w_s = 32 的 C~N 曲线（seed=1000）。x 轴：数据集大小 N（线性）；y 轴：learned bits C（bits）。
+  每个 f_s 一条线：实线+marker 为实测点，同色虚线为分段线性拟合第二段。其余 5 个宽度的同型图见报告页。</figcaption>
 </figure>
 <figure>
-  <img src="20260821_2032_width_ts_sweep/figures/C_vs_N_by_fs_w8.png" alt="C vs N w=8">
-  <figcaption><b>C_vs_N_by_fs_w8.png</b> — 同上，w_t = w_s = 8。</figcaption>
+  <img src="20260821_2032_width_ts_sweep/figures/slope_jitter_vs_width_logy.png" alt="slope jitter vs width log-y">
+  <figcaption><b>slope_jitter_vs_width_logy.png</b> — x 轴：宽度 w（线性）；y 轴：slope jitter（bits/sample，对数坐标），
+  即拐点之后相邻数据点间 dC/dN 的标准差。每个宽度 4 个点对应 4 个 f_s（3 seeds 均值），error bar 为 seed 间标准差，同色连线。</figcaption>
 </figure>
 <figure>
-  <img src="20260821_2032_width_ts_sweep/figures/slope_jitter_vs_width.png" alt="slope jitter vs width">
-  <figcaption><b>slope_jitter_vs_width.png</b> — x 轴：宽度 w（对数坐标，w_t = w_s，d=2）；
-  y 轴：slope jitter，即拐点之后相邻数据点间 dC/dN 的标准差（bits/sample）。散点为各 f_s × seed 的取值（3 seeds），实线为每 f_s 在 w=4 与 w=8 之间的线性趋势。</figcaption>
+  <img src="20260821_2032_width_ts_sweep/figures/slope_jitter_loss_vs_width_logy.png" alt="loss slope jitter vs width log-y">
+  <figcaption><b>slope_jitter_loss_vs_width_logy.png</b> — 同上，但直接在最终 train loss 上计算相邻点 dL/dN 的标准差（nats/sample，对数坐标），去掉 C = (·)·N 的 N 倍放大。</figcaption>
 </figure>
 
-<p class="note">生成时间：2026-08-22。本页仅公开 figures；原始数据（results/summary.json 与 checkpoint 内的 loss 历史）保存在本地 mirror
+<p class="note">生成时间：2026-08-22（报告页 2026-08-31 更新）。本页仅公开 figures；原始数据（results/summary.json 与 checkpoint 内的 loss 历史）保存在本地 mirror
 与远端 cephfs 同名 experiments 目录，未随本站发布。</p>
 
 </body>
