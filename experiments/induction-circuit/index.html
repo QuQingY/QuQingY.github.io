@@ -25,7 +25,6 @@ ul{padding-left:22px}
 <body>
 
 <h1>Induction Circuit 图集（重绘版）</h1>
-<p class="back" style="font-size:0.95rem;margin-bottom:16px"><a href="../../" style="color:#0066cc;text-decoration:none">&larr; 返回主页</a></p>
 <p class="sub">按指定图清单重画的 7 张图与 1 个表格。本页只记录每个图/表的做法、数据来源与图中各成分的含义，不作推断与结论。</p>
 
 <div class="card">
@@ -56,11 +55,15 @@ ul{padding-left:22px}
 <p><strong>做法与数据。</strong>读取 <code>summary.json</code> 中的 <code>layer1_previous_token_scores</code>（32 条受控序列，seed 20260727）。previous-token score 定义为第一层某 head 的 attention(t→t−1) 对所有可见位置与所有序列的平均，即 attention 矩阵次对角线的均值。</p>
 <p><strong>图的构成。</strong>横轴为第一层 12 个 head，纵轴为 previous-token score。红色柱为最大值 H0 = 0.9753；柱顶标注数值。</p>
 <figure><img src="redrawn_figures/fig3_l1_previous_token_scores.png" alt="fig3"><figcaption>图 3：L1 各 head 的 previous-token score（mean attention t→t−1）。</figcaption></figure>
+<p><strong>图 3b：H0 的 attention map。</strong>由 <code>make_head_pattern_figures.py</code> 现场计算：256 条受控序列（seed 20260727）上 L1-H0 的 attention 矩阵对 batch 取平均。横轴为 key 位置、纵轴为 query 位置（0–31），白色网格线与竖排标签标出 A₁(8)、B₁(9)、A₂(24)、B₂(25)。青色方框标出次对角线（t→t−1），其均值即 previous-token score = 0.9772（与图 3 的 0.9753 的差异来自 batch 大小：32 vs 256 条）。数值记录：H0 在 B₁→A₁ 格的平均 attention = 次对角线均值的一部分，整张图次对角线之外接近 0。</p>
+<figure><img src="redrawn_figures/fig3b_h0_attention_pattern.png" alt="fig3b"><figcaption>图 3b：L1-H0 的平均 attention pattern（256 条受控序列）。青色框为次对角线（t→t−1）。</figcaption></figure>
 
 <h2>图 4：第一层各 head 的 self-attention score</h2>
 <p><strong>做法与数据。</strong>读取 <code>analysis_outputs/openwebtext_seed777_l1h6_attention_pattern/summary.json</code> 中的 <code>all_heads</code> 列表（由 <code>analyze_l1h6_attention_pattern.py</code> 在 128 条受控序列上测得；该批序列额外在位置 16/17 放置了一对无关 token C₁/D₁）。self-attention score 定义为第一层某 head 的 attention(t→t) 对所有位置与所有序列的平均，即 attention 矩阵主对角线的均值。</p>
 <p><strong>图的构成。</strong>横轴为第一层 12 个 head，纵轴为 self-attention score。蓝色柱为最大值 H6 = 0.9770；柱顶标注数值。</p>
 <figure><img src="redrawn_figures/fig4_l1_self_attention_scores.png" alt="fig4"><figcaption>图 4：L1 各 head 的 self-attention score（mean attention t→t）。</figcaption></figure>
+<p><strong>图 4b：H6 的 attention map。</strong>与图 3b 同一脚本、同一批 256 条序列，取 L1-H6 的平均 attention 矩阵。青色方框标出主对角线（t→t），其均值即 self-attention score = 0.9764（与图 4 的 0.9770 的差异来自 batch 与序列配置：图 4 数据源为 128 条含 C₁/D₁ 的序列）。图中还可见 A₂/A₁ 与 B₁/B₂ 之间一个较暗的 2×2 互相关块（位置 24/25 行 × 8/9 列），以及 B₂→B₁ 格。</p>
+<figure><img src="redrawn_figures/fig4b_h6_attention_pattern.png" alt="fig4b"><figcaption>图 4b：L1-H6 的平均 attention pattern（256 条受控序列）。青色框为主对角线（t→t）。</figcaption></figure>
 
 <h2>图 5：注入 previous-token head 残差前后的 L2-H9 attention map + 逐 destination attention lift</h2>
 <p><strong>做法与数据。</strong>用 <code>controlled_batch</code> 生成 1 条受控序列（seed 20260727）：A = token 17859（位置 8 与 24），B = token 14278（位置 9 与 25），其余位置为互不相同的随机 token id。手工前向到第一层，取出 <strong>L1-H0 在 B₁ 位置（位置 9）经 W_O 投影后的逐 head 残差输出向量</strong>（即 <code>per_head_residual[:, 0, 9]</code>，维度 768，下称 H0(B₁) writer 向量）。对 A₂ 可见的每个候选 destination（位置 0–23，排除 B₁ 自身），把该向量<strong>加</strong>到 destination 已有的残差流上（add，不替换；其他位置不变，不重算第一层 MLP），重算第二层 attention，记录 A₂ query 对该 destination 的 attention lift。上半部分双热图演示 lift 最强的 destination（本序列上为位置 1），下半部分为全部 destination 的 lift 柱状图。</p>
@@ -97,6 +100,7 @@ ul{padding-left:22px}
 <li>绘图脚本：<code>analysis/make_redrawn_figures.py</code>（本地副本位于 <code>induction_reports/analysis/</code>）。</li>
 <li>运行环境：远程 <code>/cephfs/quqingyu/ComfyResearch/.venv/bin/python</code>（torch 2.6.0，CPU）。在 <code>/cephfs/quqingyu/physicl/analysis/</code> 目录下执行 <code>python make_redrawn_figures.py</code>，输出写入 <code>analysis_outputs/redrawn_figures/</code>。</li>
 <li>图 1–4 只读取已有 JSON/CSV；图 5、6 需要加载 checkpoint 做一次前向；图 7 与表 8 解析已有 HTML 预测表。运行同时输出 <code>redrawn_figures_meta.json</code> 记录关键数值。</li>
+<li>图 3b / 4b：<code>analysis/make_head_pattern_figures.py</code>（加载 checkpoint，计算 256 条受控序列上 L1-H0 / L1-H6 的平均 attention 矩阵）。</li>
 <li>核查脚本：<code>analysis/verify_redrawn_checks.py</code>（独立重写的前向，核对图 2 数值）、<code>analysis/diagnose_fig5_lift.py</code>（图 5 lift 的单样本 vs 批均值分解）。</li>
 <li>被复用的既有脚本：<code>verify_openwebtext_induction_circuit.py</code>（手工前向与受控序列生成）、<code>analyze_l1h6_attention_pattern.py</code>（图 4 数据）、<code>visualize_three_head_induction_machine.py</code>（三头机器前向）、<code>make_nearby_induction_prediction_table.py</code> / <code>add_real_text_prediction_window.py</code> / <code>make_named_pair_prediction_window.py</code>（图 7、8 的源表）。</li>
 </ul>
